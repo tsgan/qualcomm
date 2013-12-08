@@ -37,7 +37,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 
 #ifndef	APQ8064_UART_BASE
-#define	APQ8064_UART_BASE	0xF6640000 	/* UART0 */
+//#define	APQ8064_UART_BASE	0xF6640000 	/* UART0 */
+#define	APQ8064_UART_BASE	0x16640000 	/* UART0 */
 #endif
 
 #define MSM_BOOT_UART_DM_SR_RXRDY            (1 << 0)
@@ -73,7 +74,8 @@ static uint32_t
 uart_getreg(uint32_t *bas)
 {
 
-	return *((volatile uint32_t *)(bas + 0x70)) & 0xff;
+//	return *((volatile uint32_t *)(bas + 0x70)) & 0xff;
+	return *((volatile uint32_t *)(bas + 0x70));
 }
 
 static void
@@ -87,8 +89,8 @@ uart_setreg(uint32_t *bas, uint32_t val, int n)
 static int
 ub_getc(void)
 {
-//        int byte;
-//        static unsigned int word = 0;
+        int byte;
+        static unsigned int word = 0;
 
         /* We will be polling RXRDY status bit */
         while (!(uart_getreg((uint32_t *)apq8064_uart_base + 0x008) & MSM_BOOT_UART_DM_SR_RXRDY))
@@ -98,17 +100,17 @@ ub_getc(void)
 //        if (uart_getreg((uint32_t *)apq8064_uart_base + 0x008) & MSM_BOOT_UART_DM_SR_UART_OVERRUN)
 //                *((volatile uint32_t *)((uint32_t *)apq8064_uart_base + 0x10)) = MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT;
 
-//        if (!word) {
+        if (!word) {
                 /* Read from FIFO only if it's a first read or all the four
                  * characters out of a word have been read */
-//                word = uart_getreg((uint32_t *)apq8064_uart_base);
-                return (uart_getreg((uint32_t *)apq8064_uart_base) & 0xff);
-//        }
+                word = uart_getreg((uint32_t *)apq8064_uart_base);
+//                return (uart_getreg((uint32_t *)apq8064_uart_base) & 0xff);
+        }
 
-//        byte = (int)word & 0xff;
-//        word = word >> 8;
+        byte = (int)word & 0xff;
+        word = word >> 8;
 
-//        return byte;
+        return byte;
 }
 
 static void

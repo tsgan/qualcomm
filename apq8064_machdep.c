@@ -75,8 +75,8 @@ initarm_late_init(void)
 {
 
 	/* Enable cache */
-	cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
-	    CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
+//	cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
+//	    CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
 }
 
 #define FDT_DEVMAP_MAX		(1 + 2 + 1 + 1)

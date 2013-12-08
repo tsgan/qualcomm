@@ -15,5 +15,5 @@ arm/arm/mpcore_timer.c			standard
 arm/arm/bus_space-v6.c			standard
 arm/qualcomm/common.c			standard
 arm/qualcomm/apq8064_machdep.c		standard
-#arm/qualcomm/console.c			standard
+arm/qualcomm/console.c			standard
 

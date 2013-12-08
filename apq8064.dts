@@ -53,12 +53,12 @@
                 ranges;
                 bus-frequency = <0>;
 
-	        GIC: interrupt-controller@2000000 {
+	        GIC: interrupt-controller@02000000 {
 	                compatible = "arm,gic";
         	        interrupt-controller;
                 	#interrupt-cells = <1>;
 	                reg = < 0x02000000 0x1000 >,
-        	              < 0x02002000 0x0100 >;
+        	              < 0x02002000 0x1000 >;
 	        };
 
 	        timer@200a000 {
@@ -71,23 +71,15 @@
 	                                  <32768>;
         	        cpu-offset = <0x80000>;
         	};
-                /* 12450000 */
-                /* 12490000 */
-                /* 1A240000 */
-                /* 16240000 */
-                /* 16340000 */
-                /* 16540000 */
-                /* 16640000 */
-
-	        UART0: serial@16440000 {
+	        UART0: serial@16640000 {
                         status = "okay";
-                        compatible = "ns16550";
-        	        reg = <0x16240000 0x1000>;
+                        compatible = "qcom,uart-dm";
+        	        reg = <0x16640000 0x1000>;
                         reg-shift = <2>;
                         interrupts = <190>;
                         interrupt-parent = <&GIC>;
                         current-speed = <115200>;
-                        clock-frequency = < 24000000 >;
+//                        clock-frequency = < 24000000 >; // check
 	        };
 	}
         chosen {
