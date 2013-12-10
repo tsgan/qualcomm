@@ -37,24 +37,45 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 
 #ifndef	APQ8064_UART_BASE
-//#define	APQ8064_UART_BASE	0xF6640000 	/* UART0 */
-#define	APQ8064_UART_BASE	0x16640000 	/* UART0 */
+#define	APQ8064_UART_BASE			0xF6640000	/* UART0 */
 #endif
 
-#define MSM_BOOT_UART_DM_SR_RXRDY            (1 << 0)
-#define MSM_BOOT_UART_DM_SR_UART_OVERRUN     (1 << 4)
+#define	MSM_BOOT_UART_DM_SR(base)		((base) + 0x008)
+#define	MSM_BOOT_UART_DM_SR_RXRDY		(1 << 0)
+#define	MSM_BOOT_UART_DM_SR_UART_OVERRUN	(1 << 4)
 
-#define MSM_BOOT_UART_DM_SR_TXEMT            (1 << 3)
-#define MSM_BOOT_UART_DM_TX_READY            (1 << 7)
+#define	MSM_BOOT_UART_DM_SR_TXRDY		(1 << 2)
+#define	MSM_BOOT_UART_DM_SR_TXEMT		(1 << 3)
+#define	MSM_BOOT_UART_DM_TX_READY		(1 << 7)
 
-#define MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x)    ((x & 0x0f) << 4)
-#define MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x)    ((x >> 4 ) << 11 )
-#define MSM_BOOT_UART_DM_CR_CH_CMD(x)        (MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x)\
-                                             | MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x))
-#define MSM_BOOT_UART_DM_CMD_NULL            MSM_BOOT_UART_DM_CR_CH_CMD(0)
-#define MSM_BOOT_UART_DM_CMD_RESET_RX        MSM_BOOT_UART_DM_CR_CH_CMD(1)
-#define MSM_BOOT_UART_DM_CMD_RESET_TX        MSM_BOOT_UART_DM_CR_CH_CMD(2)
-#define MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT  MSM_BOOT_UART_DM_CR_CH_CMD(3)
+#define	MSM_BOOT_UART_DM_CR(base)		((base) + 0x10)
+#define	MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x)	((x & 0x0f) << 4)
+#define	MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x)	((x >> 4 ) << 11 )
+#define	MSM_BOOT_UART_DM_CR_CH_CMD(x)		\
+    (MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x) | MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x))
+#define	MSM_BOOT_UART_DM_CMD_NULL		MSM_BOOT_UART_DM_CR_CH_CMD(0)
+#define	MSM_BOOT_UART_DM_CMD_RESET_RX		MSM_BOOT_UART_DM_CR_CH_CMD(1)
+#define	MSM_BOOT_UART_DM_CMD_RESET_TX		MSM_BOOT_UART_DM_CR_CH_CMD(2)
+#define	MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT	MSM_BOOT_UART_DM_CR_CH_CMD(3)
+#define	MSM_BOOT_UART_DM_CMD_RES_STALE_INT	MSM_BOOT_UART_DM_CR_CH_CMD(8)
+
+/*UART General Command */
+#define	MSM_BOOT_UART_DM_CR_GENERAL_CMD(x)	((x) << 8)
+
+#define	MSM_BOOT_UART_DM_GCMD_NULL		MSM_BOOT_UART_DM_CR_GENERAL_CMD(0)
+#define	MSM_BOOT_UART_DM_GCMD_CR_PROT_EN	MSM_BOOT_UART_DM_CR_GENERAL_CMD(1)
+#define	MSM_BOOT_UART_DM_GCMD_CR_PROT_DIS	MSM_BOOT_UART_DM_CR_GENERAL_CMD(2)
+#define	MSM_BOOT_UART_DM_GCMD_RES_TX_RDY_INT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(3)
+#define	MSM_BOOT_UART_DM_GCMD_SW_FORCE_STALE	MSM_BOOT_UART_DM_CR_GENERAL_CMD(4)
+#define	MSM_BOOT_UART_DM_GCMD_ENA_STALE_EVT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(5)
+#define	MSM_BOOT_UART_DM_GCMD_DIS_STALE_EVT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(6)
+
+/* Used for RX transfer initialization */
+#define	MSM_BOOT_UART_DM_DMRX(base)		((base) + 0x34)
+
+/* Default DMRX value - any value bigger than FIFO size would be fine */
+#define	MSM_BOOT_UART_DM_DMRX_DEF_VALUE		0x220
+
 
 /*
  * The base address of the uart registers.
@@ -74,43 +95,45 @@ static uint32_t
 uart_getreg(uint32_t *bas)
 {
 
-//	return *((volatile uint32_t *)(bas + 0x70)) & 0xff;
-	return *((volatile uint32_t *)(bas + 0x70));
+	return *((volatile uint32_t *)(bas));
 }
 
 static void
-uart_setreg(uint32_t *bas, uint32_t val, int n)
+uart_setreg(uint32_t *bas, uint32_t val)
 {
 
-	*((volatile uint32_t *)(bas + 0x40)) = n;
-	*((volatile uint32_t *)(bas + 0x70)) = val;
+	*((volatile uint32_t *)(bas)) = val;
 }
 
 static int
 ub_getc(void)
 {
-        int byte;
-        static unsigned int word = 0;
+	int byte;
+	static unsigned int word = 0;
 
-        /* We will be polling RXRDY status bit */
-        while (!(uart_getreg((uint32_t *)apq8064_uart_base + 0x008) & MSM_BOOT_UART_DM_SR_RXRDY))
-               	__asm __volatile("nop");
+	/* We will be polling RXRDY status bit */
+	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
+	    MSM_BOOT_UART_DM_SR_RXRDY))
+		__asm __volatile("nop");
 
-        /* Check for Overrun error. We'll just reset Error Status */
-//        if (uart_getreg((uint32_t *)apq8064_uart_base + 0x008) & MSM_BOOT_UART_DM_SR_UART_OVERRUN)
-//                *((volatile uint32_t *)((uint32_t *)apq8064_uart_base + 0x10)) = MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT;
+	/* Check for Overrun error. We'll just reset Error Status */
+	if (uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
+	    MSM_BOOT_UART_DM_SR_UART_OVERRUN)
+		uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
+		    MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT);
 
-        if (!word) {
-                /* Read from FIFO only if it's a first read or all the four
-                 * characters out of a word have been read */
-                word = uart_getreg((uint32_t *)apq8064_uart_base);
-//                return (uart_getreg((uint32_t *)apq8064_uart_base) & 0xff);
-        }
+	if (!word) {
+		/*
+		 * Read from FIFO only if it's a first read or all the four
+		 * characters out of a word have been read 
+		 */
+		word = uart_getreg((uint32_t *)(apq8064_uart_base + 0x70));
+	}
 
-        byte = (int)word & 0xff;
-        word = word >> 8;
+	byte = (int)word & 0xff;
+	word = word >> 8;
 
-        return byte;
+	return byte;
 }
 
 static void
@@ -119,11 +142,17 @@ ub_putc(unsigned char c)
 	if (c == '\n')
 		ub_putc('\r');
 
-        /* Check if transmit FIFO is empty. */
-        while (!(uart_getreg((uint32_t *)apq8064_uart_base + 0x008) & MSM_BOOT_UART_DM_SR_TXEMT))
-               	__asm __volatile("nop");
+	/* Check if transmit FIFO is empty. */
+	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
+	    MSM_BOOT_UART_DM_SR_TXEMT))
+		__asm __volatile("nop");
+	/* Wait till TX FIFO has space */
+	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
+	    MSM_BOOT_UART_DM_SR_TXRDY))
+		__asm __volatile("nop");
 
-	uart_setreg((uint32_t *)apq8064_uart_base, c, 1);
+	uart_setreg((uint32_t *)(apq8064_uart_base + 0x40), 1);
+	uart_setreg((uint32_t *)(apq8064_uart_base + 0x70), c);
 }
 
 static cn_probe_t	uart_cnprobe;
@@ -155,8 +184,14 @@ uart_cnprobe(struct consdev *cp)
 static void
 uart_cninit(struct consdev *cp)
 {
-//	uart_setreg((uint32_t *)(apq8064_uart_base + 
-//	    (UART_FCR << REG_SHIFT)), 0x06);
+	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
+	    MSM_BOOT_UART_DM_GCMD_DIS_STALE_EVT);
+	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
+	    MSM_BOOT_UART_DM_CMD_RES_STALE_INT);
+	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_DMRX(apq8064_uart_base),
+	    MSM_BOOT_UART_DM_DMRX_DEF_VALUE);
+	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
+	    MSM_BOOT_UART_DM_GCMD_ENA_STALE_EVT);
 }
 
 void
