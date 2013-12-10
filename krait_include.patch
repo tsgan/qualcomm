@@ -1,0 +1,89 @@
+Index: include/cpuconf.h
+===================================================================
+--- include/cpuconf.h	(revision 258860)
++++ include/cpuconf.h	(working copy)
+@@ -66,6 +66,7 @@
+ 			 defined(CPU_FA626TE) +				\
+ 			 defined(CPU_XSCALE_IXP425)) +			\
+ 			 defined(CPU_CORTEXA) +				\
++			 defined(CPU_KRAIT) +				\
+ 			 defined(CPU_MV_PJ4B)
+ 
+ /*
+@@ -97,7 +98,7 @@
+ #endif
+ #endif
+ 
+-#if defined(CPU_CORTEXA)
++#if defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ #define ARM_ARCH_7A	1
+ #else
+ #define ARM_ARCH_7A	0
+@@ -156,7 +157,7 @@
+ #define ARM_MMU_V6		0
+ #endif
+ 
+-#if defined(CPU_CORTEXA)
++#if defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ #define ARM_MMU_V7		1
+ #else
+ #define ARM_MMU_V7		0
+Index: include/cpufunc.h
+===================================================================
+--- include/cpufunc.h	(revision 258860)
++++ include/cpufunc.h	(working copy)
+@@ -188,7 +188,7 @@
+ #else
+ void tlb_broadcast(int);
+ 
+-#if defined(CPU_CORTEXA) || defined(CPU_MV_PJ4B)
++#if defined(CPU_CORTEXA) || defined(CPU_MV_PJ4B) || defined(CPU_KRAIT)
+ #define TLB_BROADCAST	/* No need to explicitely send an IPI */
+ #else
+ #define TLB_BROADCAST	tlb_broadcast(7)
+@@ -463,7 +463,7 @@
+ #endif
+ 
+ #if defined(CPU_ARM1136) || defined(CPU_ARM1176) || \
+-	defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA)
++	defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ void	arm11_setttb		(u_int);
+ void	arm11_sleep		(int);
+ 
+Index: include/md_var.h
+===================================================================
+--- include/md_var.h	(revision 258860)
++++ include/md_var.h	(working copy)
+@@ -63,6 +63,7 @@
+ 	CPU_CLASS_ARM10E,
+ 	CPU_CLASS_ARM10EJ,
+ 	CPU_CLASS_CORTEXA,
++	CPU_CLASS_KRAIT,
+ 	CPU_CLASS_SA1,
+ 	CPU_CLASS_XSCALE,
+ 	CPU_CLASS_ARM11J,
+Index: include/intr.h
+===================================================================
+--- include/intr.h	(revision 258860)
++++ include/intr.h	(working copy)
+@@ -52,6 +52,8 @@
+ #define NIRQ		64
+ #elif defined(CPU_CORTEXA)
+ #define NIRQ		160
++#elif defined(CPU_KRAIT)
++#define NIRQ		288
+ #elif defined(CPU_ARM1136) || defined(CPU_ARM1176)
+ #define NIRQ		128
+ #elif defined(SOC_MV_ARMADAXP)
+Index: include/armreg.h
+===================================================================
+--- include/armreg.h	(revision 258860)
++++ include/armreg.h	(working copy)
+@@ -158,6 +158,7 @@
+ #define CPU_ID_CORTEXA15	0x410fc0f0
+ #define CPU_ID_SA110		0x4401a100
+ #define CPU_ID_SA1100		0x4401a110
++#define CPU_ID_KRAIT		0x510f06f0 /* Qualcomm Snapdragon S4 Pro/APQ8064 */
+ #define	CPU_ID_TI925T		0x54029250
+ #define CPU_ID_MV88FR131	0x56251310 /* Marvell Feroceon 88FR131 Core */
+ #define CPU_ID_MV88FR331	0x56153310 /* Marvell Feroceon 88FR331 Core */

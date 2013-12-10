@@ -1,0 +1,166 @@
+Index: arm/swtch.S
+===================================================================
+--- arm/swtch.S	(revision 258860)
++++ arm/swtch.S	(working copy)
+@@ -131,7 +131,8 @@
+ 	/* Switch to lwp0 context */
+ 
+ 	ldr	r9, .Lcpufuncs
+-#if !defined(CPU_ARM11) && !defined(CPU_CORTEXA) && !defined(CPU_MV_PJ4B)
++#if !defined(CPU_ARM11) && !defined(CPU_CORTEXA) && !defined(CPU_MV_PJ4B) && \
++    !defined(CPU_KRAIT)
+ 	mov	lr, pc
+ 	ldr	pc, [r9, #CF_IDCACHE_WBINV_ALL]
+ #endif
+@@ -361,7 +362,8 @@
+ 	cmpeq	r0, r5				/* Same DACR? */
+ 	beq	.Lcs_context_switched		/* yes! */
+ 
+-#if !defined(CPU_ARM11) && !defined(CPU_CORTEXA) && !defined(CPU_MV_PJ4B)
++#if !defined(CPU_ARM11) && !defined(CPU_CORTEXA) && !defined(CPU_MV_PJ4B) && \
++    !defined(CPU_KRAIT)
+ 	/*
+ 	 * Definately need to flush the cache.
+ 	 */
+Index: arm/cpufunc.c
+===================================================================
+--- arm/cpufunc.c	(revision 258860)
++++ arm/cpufunc.c	(working copy)
+@@ -1038,7 +1038,7 @@
+ };
+ #endif /*CPU_ARM1176 */
+ 
+-#if defined(CPU_CORTEXA)
++#if defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ struct cpu_functions cortexa_cpufuncs = {
+ 	/* CPU functions */
+ 	
+@@ -1102,7 +1102,7 @@
+ 	
+ 	cortexa_setup                     /* cpu setup            */
+ };
+-#endif /* CPU_CORTEXA */
++#endif /* CPU_CORTEXA || CPU_KRAIT */
+ 
+ /*
+  * Global constants also used by locore.s
+@@ -1118,7 +1118,7 @@
+   defined(CPU_XSCALE_PXA2X0) || defined(CPU_XSCALE_IXP425) ||		\
+   defined(CPU_FA526) || defined(CPU_FA626TE) || defined(CPU_MV_PJ4B) ||			\
+   defined(CPU_XSCALE_80219) || defined(CPU_XSCALE_81342) || \
+-  defined(CPU_CORTEXA)
++  defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ 
+ static void get_cachetype_cp15(void);
+ 
+@@ -1416,7 +1416,7 @@
+ 		goto out;
+ 	}
+ #endif /* CPU_ARM1136 || CPU_ARM1176 */
+-#ifdef CPU_CORTEXA
++#if defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ 	if (cputype == CPU_ID_CORTEXA5 ||
+ 	    cputype == CPU_ID_CORTEXA7 ||
+ 	    cputype == CPU_ID_CORTEXA8R1 ||
+@@ -1425,7 +1425,8 @@
+ 	    cputype == CPU_ID_CORTEXA9R1 ||
+ 	    cputype == CPU_ID_CORTEXA9R2 ||
+ 	    cputype == CPU_ID_CORTEXA9R3 ||
+-	    cputype == CPU_ID_CORTEXA15 ) {
++	    cputype == CPU_ID_CORTEXA15 ||
++	    cputype == CPU_ID_KRAIT ) {
+ 		cpufuncs = cortexa_cpufuncs;
+ 		cpu_reset_needs_v4_MMU_disable = 1;     /* V4 or higher */
+ 		get_cachetype_cp15();
+@@ -1435,7 +1436,7 @@
+ 		cpu_do_powersave = 1;
+ 		goto out;
+ 	}
+-#endif /* CPU_CORTEXA */
++#endif /* CPU_CORTEXA || CPU_KRAIT */
+ 		
+ #if defined(CPU_MV_PJ4B)
+ 	if (cputype == CPU_ID_MV88SV581X_V7 ||
+@@ -2407,7 +2408,7 @@
+ }
+ #endif /* CPU_MV_PJ4B */
+ 
+-#ifdef CPU_CORTEXA
++#if defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ 
+ void
+ cortexa_setup(char *args)
+@@ -2452,7 +2453,7 @@
+ 	armv7_auxctrl((1 << 6) | (1 << 0), (1 << 6) | (1 << 0)); /* Enable SMP + TLB broadcasting  */
+ #endif
+ }
+-#endif  /* CPU_CORTEXA */
++#endif  /* CPU_CORTEXA || CPU_KRAIT */
+ 
+ 
+ #ifdef CPU_SA110
+Index: arm/elf_trampoline.c
+===================================================================
+--- arm/elf_trampoline.c	(revision 258860)
++++ arm/elf_trampoline.c	(working copy)
+@@ -102,7 +102,7 @@
+ #elif defined(SOC_MV_KIRKWOOD) || defined(SOC_MV_DISCOVERY)
+ #define cpu_l2cache_wbinv_all	sheeva_l2cache_wbinv_all
+ extern void sheeva_l2cache_wbinv_all(void);
+-#elif defined(CPU_CORTEXA)
++#elif defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ #define cpu_idcache_wbinv_all	armv7_idcache_wbinv_all
+ #define cpu_l2cache_wbinv_all()
+ #else
+Index: arm/locore.S
+===================================================================
+--- arm/locore.S	(revision 258860)
++++ arm/locore.S	(working copy)
+@@ -170,7 +170,7 @@
+ 	mcr	p15, 0, r0, c2, c0, 0	/* Set TTB */
+ 	mcr	p15, 0, r0, c8, c7, 0	/* Flush TLB */
+ 
+-#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_CORTEXA) || defined(CPU_MV_PJ4B)
++#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_CORTEXA) || defined(CPU_MV_PJ4B) || defined(CPU_KRAIT)
+ 	mov	r0, #0
+ 	mcr	p15, 0, r0, c13, c0, 1	/* Set ASID to 0 */
+ #endif
+@@ -377,7 +377,7 @@
+ 	mcr	p15, 0, r0, c2, c0, 0	/* Set TTB */
+ 	mcr	p15, 0, r0, c8, c7, 0	/* Flush TLB */
+ 
+-#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA)
++#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ 	mov	r0, #0
+ 	mcr	p15, 0, r0, c13, c0, 1	/* Set ASID to 0 */
+ #endif
+@@ -389,7 +389,7 @@
+ 	mcr	p15, 0, r0, c3, c0, 0
+ 	/* Enable MMU */
+ 	mrc	p15, 0, r0, c1, c0, 0
+-#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA)
++#if defined(CPU_ARM1136) || defined(CPU_ARM1176) || defined(CPU_MV_PJ4B) || defined(CPU_CORTEXA) || defined(CPU_KRAIT)
+ 	orr	r0, r0, #CPU_CONTROL_V6_EXTPAGE
+ 	orr	r0, r0, #CPU_CONTROL_AF_ENABLE
+ #endif
+Index: arm/identcpu.c
+===================================================================
+--- arm/identcpu.c	(revision 258860)
++++ arm/identcpu.c	(working copy)
+@@ -254,6 +254,8 @@
+ 	  generic_steppings },
+ 	{ CPU_ID_CORTEXA15,     CPU_CLASS_CORTEXA,      "Cortex A15",
+ 	  generic_steppings },
++	{ CPU_ID_KRAIT,		CPU_CLASS_KRAIT,	"Krait",
++	  generic_steppings },
+ 
+ 	{ CPU_ID_SA110,		CPU_CLASS_SA1,		"SA-110",
+ 	  sa110_steppings },
+@@ -353,6 +355,7 @@
+ 	{ "ARM10E",	"CPU_ARM10" },		/* CPU_CLASS_ARM10E */
+ 	{ "ARM10EJ",	"CPU_ARM10" },		/* CPU_CLASS_ARM10EJ */
+ 	{ "Cortex-A",	"CPU_CORTEXA" },	/* CPU_CLASS_CORTEXA */
++	{ "Krait",	"CPU_KRAIT" },		/* CPU_CLASS_KRAIT */
+ 	{ "SA-1",	"CPU_SA110" },		/* CPU_CLASS_SA1 */
+ 	{ "XScale",	"CPU_XSCALE_..." },	/* CPU_CLASS_XSCALE */
+ 	{ "ARM11J",	"CPU_ARM11" },		/* CPU_CLASS_ARM11J */
