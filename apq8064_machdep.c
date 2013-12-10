@@ -75,8 +75,8 @@ initarm_late_init(void)
 {
 
 	/* Enable cache */
-//	cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
-//	    CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
+	cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
+	    CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
 }
 
 #define FDT_DEVMAP_MAX		(1 + 2 + 1 + 1)
@@ -91,14 +91,6 @@ int
 initarm_devmap_init(void)
 {
 	int i = 0;
-/* APQ8064 uart addresses */
-                /* 12450000 */
-                /* 12490000 */
-                /* 1A240000 */
-                /* 16240000 */
-                /* 16340000 */
-                /* 16540000 */
-                /* 16640000 */
 
 	fdt_devmap[i].pd_va = 0xF6600000;
 	fdt_devmap[i].pd_pa = 0x16600000;
