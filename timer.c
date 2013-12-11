@@ -96,7 +96,8 @@ enum {
 };
 
 //#define	SYS_TIMER_CLKSRC		32768 /* clock source */
-#define	SYS_TIMER_CLKSRC		6750000 /* clock source */
+//#define	SYS_TIMER_CLKSRC		6750000 /* clock source */
+#define	SYS_TIMER_CLKSRC		27000000 /* clock source */
 
 struct apq8064_timer_softc {
 	device_t 	sc_dev;
@@ -184,11 +185,14 @@ apq8064_timer_attach(device_t dev)
 	}
 
 	/* set clock */
-	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
+//	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
 
 	/* enable timers */
 	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
-	timer_write_4(sc, DGT_ENABLE, DGT_ENABLE_EN);
+//	timer_write_4(sc, GPT_CLEAR, 0);
+	timer_write_4(sc, GPT_MATCH_VAL, ~0);
+
+//	timer_write_4(sc, DGT_ENABLE, DGT_ENABLE_EN);
 
 //	timer_write_4(sc, GPT1_CLEAR, 0);
 //	timer_write_4(sc, GPT1_ENABLE, GPT_ENABLE_EN);
@@ -247,9 +251,8 @@ apq8064_timer_timer_start(struct eventtimer *et, sbintime_t first,
 		count = sc->sc_period;
 
 	/* Update timer values */
+//	timer_write_4(sc, DGT_CLEAR, 0);
 	timer_write_4(sc, DGT_MATCH_VAL, count);
-
-	timer_write_4(sc, DGT_CLEAR, 0);
 
 	val = timer_read_4(sc, DGT_ENABLE);
 	if (period != 0) {
@@ -278,11 +281,11 @@ apq8064_timer_timer_stop(struct eventtimer *et)
 	val = timer_read_4(sc, DGT_ENABLE);
 	val &= ~DGT_ENABLE_EN;
 	timer_write_4(sc, DGT_ENABLE, val);
-	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
-		;
-        timer_write_4(sc, DGT_CLEAR, 0);
-	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
-		;
+//	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+//		;
+//        timer_write_4(sc, DGT_CLEAR, 0);
+//	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+//		;
 	sc->sc_period = 0;
 
 	return (0);
@@ -309,8 +312,6 @@ apq8064_timer_hardclock(void *arg)
 	uint32_t val;
 
 	sc = (struct apq8064_timer_softc *)arg;
-
-//	timer_write_4(sc, DGT_CLEAR, 0);
 
 	val = timer_read_4(sc, DGT_ENABLE);
 	/*
@@ -370,7 +371,7 @@ DELAY(int usec)
 	uint32_t counter;
 	uint64_t end, now;
 
-	if (!apq8064_timer_initialized) {
+	if (1 || !apq8064_timer_initialized) {
 		for (; usec > 0; usec--)
 			for (counter = 50; counter > 0; counter--)
 				cpufunc_nullop();
