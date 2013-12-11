@@ -88,7 +88,15 @@ __FBSDID("$FreeBSD$");
 
 #define	SPSS_TIMER_STATUS_DGT_EN	(1 << 0)
 
-#define	SYS_TIMER_CLKSRC		32768 /* clock source */
+enum {
+        DGT_CLK_CTL_DIV_1 = 0,
+        DGT_CLK_CTL_DIV_2 = 1,
+        DGT_CLK_CTL_DIV_3 = 2,
+        DGT_CLK_CTL_DIV_4 = 3,
+};
+
+//#define	SYS_TIMER_CLKSRC		32768 /* clock source */
+#define	SYS_TIMER_CLKSRC		6750000 /* clock source */
 
 struct apq8064_timer_softc {
 	device_t 	sc_dev;
@@ -175,7 +183,10 @@ apq8064_timer_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	/* Enable timers */
+	/* set clock */
+	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
+
+	/* enable timers */
 	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
 	timer_write_4(sc, DGT_ENABLE, DGT_ENABLE_EN);
 
