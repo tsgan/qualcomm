@@ -57,24 +57,24 @@ __FBSDID("$FreeBSD$");
  */
 #define	MSM_TMR_BASE		0xf200A000
 #define	MSM_GPT_BASE		0x04
-#define	MSM_GPT1_BASE		0x14
+//#define	MSM_GPT1_BASE		0x14
 #define	MSM_DGT_BASE		0x24
 #define	SPSS_TIMER_STATUS	0x88
 
 #define	GPT_REG(off)		(MSM_GPT_BASE + (off))
-#define	GPT1_REG(off)		(MSM_GPT1_BASE + (off))
+//#define	GPT1_REG(off)		(MSM_GPT1_BASE + (off))
 #define	DGT_REG(off)		(MSM_DGT_BASE + (off))
 
 #define	GPT_MATCH_VAL		GPT_REG(0x0000)
 #define	GPT_COUNT_VAL		GPT_REG(0x0004)
 #define	GPT_ENABLE		GPT_REG(0x0008)
 #define	GPT_CLEAR		GPT_REG(0x000C)
-
+/*
 #define	GPT1_MATCH_VAL		GPT1_REG(0x0000)
 #define	GPT1_COUNT_VAL		GPT1_REG(0x0004)
 #define	GPT1_ENABLE		GPT1_REG(0x0008)
 #define	GPT1_CLEAR		GPT1_REG(0x000C)
-
+*/
 #define	DGT_MATCH_VAL		DGT_REG(0x0000)
 #define	DGT_COUNT_VAL		DGT_REG(0x0004)
 #define	DGT_ENABLE		DGT_REG(0x0008)
@@ -179,8 +179,8 @@ apq8064_timer_attach(device_t dev)
 	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
 	timer_write_4(sc, DGT_ENABLE, DGT_ENABLE_EN);
 
-	timer_write_4(sc, GPT1_CLEAR, 0);
-	timer_write_4(sc, GPT1_ENABLE, GPT_ENABLE_EN);
+//	timer_write_4(sc, GPT1_CLEAR, 0);
+//	timer_write_4(sc, GPT1_ENABLE, GPT_ENABLE_EN);
 
 	sc->timer0_freq = SYS_TIMER_CLKSRC;
 
@@ -299,7 +299,7 @@ apq8064_timer_hardclock(void *arg)
 
 	sc = (struct apq8064_timer_softc *)arg;
 
-	timer_write_4(sc, DGT_CLEAR, 0);
+//	timer_write_4(sc, DGT_CLEAR, 0);
 
 	val = timer_read_4(sc, DGT_ENABLE);
 	/*
@@ -331,7 +331,7 @@ apq8064_timer_get_timecount(struct timecounter *tc)
 	if (apq8064_timer_sc == NULL)
 		return (0);
 
-	timecount = timer_read_4(apq8064_timer_sc, GPT1_COUNT_VAL);
+	timecount = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
 
 	return (timecount);
 }
@@ -365,20 +365,21 @@ DELAY(int usec)
 				cpufunc_nullop();
 		return;
 	}
+/*
 	timer_write_4(apq8064_timer_sc, GPT_CLEAR, 0);
 	timer_write_4(apq8064_timer_sc, GPT_ENABLE, 0);
 	while (timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL) != 0)
 		;
 
 	timer_write_4(apq8064_timer_sc, GPT_ENABLE, GPT_ENABLE_EN);
-
+*/
 	now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
 	end = now + (apq8064_timer_sc->timer0_freq / 1000000) * (usec + 1);
 
 	while (now < end)
 		now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
 
-	timer_write_4(apq8064_timer_sc, GPT_ENABLE, 0);
-	timer_write_4(apq8064_timer_sc, GPT_CLEAR, 0);
+//	timer_write_4(apq8064_timer_sc, GPT_ENABLE, 0);
+//	timer_write_4(apq8064_timer_sc, GPT_CLEAR, 0);
 }
 
