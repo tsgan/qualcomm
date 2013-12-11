@@ -24,7 +24,7 @@
  * SUCH DAMAGE.
  */
 
-/* Simple UART console driver for Snapdragon */
+/* Simple UART DM console driver for Snapdragon */
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -37,54 +37,54 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 
 #ifndef	APQ8064_UART_BASE
-#define	APQ8064_UART_BASE			0xF6640000	/* UART0 */
+#define	APQ8064_UART_BASE		0xF6640000	/* UART0 */
 #endif
 
-#define	MSM_BOOT_UART_DM_SR(base)		((base) + 0x008)
-#define	MSM_BOOT_UART_DM_SR_RXRDY		(1 << 0)
-#define	MSM_BOOT_UART_DM_SR_UART_OVERRUN	(1 << 4)
+#define	UART_DM_SR(base)		((base) + 0x008)
+#define	UART_DM_SR_RXRDY		(1 << 0)
+#define	UART_DM_SR_UART_OVERRUN		(1 << 4)
 
-#define	MSM_BOOT_UART_DM_SR_TXRDY		(1 << 2)
-#define	MSM_BOOT_UART_DM_SR_TXEMT		(1 << 3)
-#define	MSM_BOOT_UART_DM_TX_READY		(1 << 7)
+#define	UART_DM_SR_TXRDY		(1 << 2)
+#define	UART_DM_SR_TXEMT		(1 << 3)
+#define	UART_DM_TX_READY		(1 << 7)
 
-#define	MSM_BOOT_UART_DM_CR(base)		((base) + 0x10)
-#define	MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x)	((x & 0x0f) << 4)
-#define	MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x)	((x >> 4 ) << 11 )
-#define	MSM_BOOT_UART_DM_CR_CH_CMD(x)		\
-    (MSM_BOOT_UART_DM_CR_CH_CMD_LSB(x) | MSM_BOOT_UART_DM_CR_CH_CMD_MSB(x))
-#define	MSM_BOOT_UART_DM_CMD_NULL		MSM_BOOT_UART_DM_CR_CH_CMD(0)
-#define	MSM_BOOT_UART_DM_CMD_RESET_RX		MSM_BOOT_UART_DM_CR_CH_CMD(1)
-#define	MSM_BOOT_UART_DM_CMD_RESET_TX		MSM_BOOT_UART_DM_CR_CH_CMD(2)
-#define	MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT	MSM_BOOT_UART_DM_CR_CH_CMD(3)
-#define	MSM_BOOT_UART_DM_CMD_RES_STALE_INT	MSM_BOOT_UART_DM_CR_CH_CMD(8)
+#define	UART_DM_CR(base)		((base) + 0x10)
+#define	UART_DM_CR_CH_CMD_LSB(x)	((x & 0x0f) << 4)
+#define	UART_DM_CR_CH_CMD_MSB(x)	((x >> 4 ) << 11 )
+#define	UART_DM_CR_CH_CMD(x)		\
+    (UART_DM_CR_CH_CMD_LSB(x) | UART_DM_CR_CH_CMD_MSB(x))
+#define	UART_DM_CMD_NULL		UART_DM_CR_CH_CMD(0)
+#define	UART_DM_CMD_RESET_RX		UART_DM_CR_CH_CMD(1)
+#define	UART_DM_CMD_RESET_TX		UART_DM_CR_CH_CMD(2)
+#define	UART_DM_CMD_RESET_ERR_STAT	UART_DM_CR_CH_CMD(3)
+#define	UART_DM_CMD_RES_STALE_INT	UART_DM_CR_CH_CMD(8)
 
 /*UART General Command */
-#define	MSM_BOOT_UART_DM_CR_GENERAL_CMD(x)	((x) << 8)
+#define	UART_DM_CR_GENERAL_CMD(x)	((x) << 8)
 
-#define	MSM_BOOT_UART_DM_GCMD_NULL		MSM_BOOT_UART_DM_CR_GENERAL_CMD(0)
-#define	MSM_BOOT_UART_DM_GCMD_CR_PROT_EN	MSM_BOOT_UART_DM_CR_GENERAL_CMD(1)
-#define	MSM_BOOT_UART_DM_GCMD_CR_PROT_DIS	MSM_BOOT_UART_DM_CR_GENERAL_CMD(2)
-#define	MSM_BOOT_UART_DM_GCMD_RES_TX_RDY_INT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(3)
-#define	MSM_BOOT_UART_DM_GCMD_SW_FORCE_STALE	MSM_BOOT_UART_DM_CR_GENERAL_CMD(4)
-#define	MSM_BOOT_UART_DM_GCMD_ENA_STALE_EVT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(5)
-#define	MSM_BOOT_UART_DM_GCMD_DIS_STALE_EVT	MSM_BOOT_UART_DM_CR_GENERAL_CMD(6)
+#define	UART_DM_GCMD_NULL		UART_DM_CR_GENERAL_CMD(0)
+#define	UART_DM_GCMD_CR_PROT_EN		UART_DM_CR_GENERAL_CMD(1)
+#define	UART_DM_GCMD_CR_PROT_DIS	UART_DM_CR_GENERAL_CMD(2)
+#define	UART_DM_GCMD_RES_TX_RDY_INT	UART_DM_CR_GENERAL_CMD(3)
+#define	UART_DM_GCMD_SW_FORCE_STALE	UART_DM_CR_GENERAL_CMD(4)
+#define	UART_DM_GCMD_ENA_STALE_EVT	UART_DM_CR_GENERAL_CMD(5)
+#define	UART_DM_GCMD_DIS_STALE_EVT	UART_DM_CR_GENERAL_CMD(6)
 
 /* Used for RX transfer initialization */
-#define	MSM_BOOT_UART_DM_DMRX(base)		((base) + 0x34)
+#define	UART_DM_DMRX(base)		((base) + 0x34)
 
 /* Default DMRX value - any value bigger than FIFO size would be fine */
-#define	MSM_BOOT_UART_DM_DMRX_DEF_VALUE		0x220
-
+#define	UART_DM_DMRX_DEF_VALUE		0x220
 
 /*
  * The base address of the uart registers.
  *
- * This is global so that it can be changed on the fly from the outside.  For
- * example, set apq8064_uart_base=physaddr and then call cninit() as the first two
- * lines of initarm() and enjoy printf() availability through the tricky bits of
- * startup.  After initarm() switches from physical to virtual addressing, just
- * set apq8064_uart_base=virtaddr and printf keeps working.
+ * This is global so that it can be changed on the fly from the outside.
+ * For instance, set apq8064_uart_base=physaddr and then call cninit()
+ * as the first two lines of initarm() and enjoy printf() availability
+ * through the tricky bits of startup.  After initarm() switches from
+ * physical to virtual addressing, just set apq8064_uart_base=virtaddr
+ * and printf keeps working.
  */
 uint32_t apq8064_uart_base = APQ8064_UART_BASE;
 
@@ -111,25 +111,24 @@ ub_getc(void)
 	int byte;
 	static unsigned int word = 0;
 
-	/* We will be polling RXRDY status bit */
-	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
-	    MSM_BOOT_UART_DM_SR_RXRDY))
+	/* Check RXRDY status bit */
+	while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+	    UART_DM_SR_RXRDY))
 		__asm __volatile("nop");
 
-	/* Check for Overrun error. We'll just reset Error Status */
-	if (uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
-	    MSM_BOOT_UART_DM_SR_UART_OVERRUN)
-		uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
-		    MSM_BOOT_UART_DM_CMD_RESET_ERR_STAT);
+	/* Check Overrun error, reset Error Status when necessary */
+	if (uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+	    UART_DM_SR_UART_OVERRUN)
+		uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+		    UART_DM_CMD_RESET_ERR_STAT);
 
 	if (!word) {
 		/*
-		 * Read from FIFO only if it's a first read or all the four
-		 * characters out of a word have been read 
+		 * Read from FIFO only if it's a first read or all four
+		 * characters of a word have been read.
 		 */
 		word = uart_getreg((uint32_t *)(apq8064_uart_base + 0x70));
 	}
-
 	byte = (int)word & 0xff;
 	word = word >> 8;
 
@@ -142,15 +141,15 @@ ub_putc(unsigned char c)
 	if (c == '\n')
 		ub_putc('\r');
 
-	/* Check if transmit FIFO is empty. */
-	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
-	    MSM_BOOT_UART_DM_SR_TXEMT))
+	/* Check TX FIFO is empty. */
+	while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+	    UART_DM_SR_TXEMT))
 		__asm __volatile("nop");
-	/* Wait till TX FIFO has space */
-	while (!(uart_getreg((uint32_t *)MSM_BOOT_UART_DM_SR(apq8064_uart_base)) &
-	    MSM_BOOT_UART_DM_SR_TXRDY))
+	/* Wait until TX is ready */
+	while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+	    UART_DM_SR_TXRDY))
 		__asm __volatile("nop");
-
+	/* Write number of char, 1 in this case and char itself */
 	uart_setreg((uint32_t *)(apq8064_uart_base + 0x40), 1);
 	uart_setreg((uint32_t *)(apq8064_uart_base + 0x70), c);
 }
@@ -177,6 +176,7 @@ uart_cnungrab(struct consdev *cp)
 static void
 uart_cnprobe(struct consdev *cp)
 {
+
 	sprintf(cp->cn_name, "uart");
 	cp->cn_pri = CN_NORMAL;
 }
@@ -184,25 +184,29 @@ uart_cnprobe(struct consdev *cp)
 static void
 uart_cninit(struct consdev *cp)
 {
-	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
-	    MSM_BOOT_UART_DM_GCMD_DIS_STALE_EVT);
-	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
-	    MSM_BOOT_UART_DM_CMD_RES_STALE_INT);
-	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_DMRX(apq8064_uart_base),
-	    MSM_BOOT_UART_DM_DMRX_DEF_VALUE);
-	uart_setreg((uint32_t *)MSM_BOOT_UART_DM_CR(apq8064_uart_base),
-	    MSM_BOOT_UART_DM_GCMD_ENA_STALE_EVT);
+
+	/* Init RX transfer */
+	uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+	    UART_DM_GCMD_DIS_STALE_EVT);
+	uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+	    UART_DM_CMD_RES_STALE_INT);
+	uart_setreg((uint32_t *)UART_DM_DMRX(apq8064_uart_base),
+	    UART_DM_DMRX_DEF_VALUE);
+	uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+	    UART_DM_GCMD_ENA_STALE_EVT);
 }
 
 void
 uart_cnputc(struct consdev *cp, int c)
 {
+
 	ub_putc(c);
 }
 
 int
 uart_cngetc(struct consdev * cp)
 {
+
 	return ub_getc();
 }
 
@@ -212,4 +216,3 @@ uart_cnterm(struct consdev * cp)
 }
 
 CONSOLE_DRIVER(uart);
-
