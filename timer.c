@@ -57,24 +57,17 @@ __FBSDID("$FreeBSD$");
  */
 #define	MSM_TMR_BASE		0xf200A000
 #define	MSM_GPT_BASE		0x04
-//#define	MSM_GPT1_BASE		0x14
 #define	MSM_DGT_BASE		0x24
 #define	SPSS_TIMER_STATUS	0x88
 
 #define	GPT_REG(off)		(MSM_GPT_BASE + (off))
-//#define	GPT1_REG(off)		(MSM_GPT1_BASE + (off))
 #define	DGT_REG(off)		(MSM_DGT_BASE + (off))
 
 #define	GPT_MATCH_VAL		GPT_REG(0x0000)
 #define	GPT_COUNT_VAL		GPT_REG(0x0004)
 #define	GPT_ENABLE		GPT_REG(0x0008)
 #define	GPT_CLEAR		GPT_REG(0x000C)
-/*
-#define	GPT1_MATCH_VAL		GPT1_REG(0x0000)
-#define	GPT1_COUNT_VAL		GPT1_REG(0x0004)
-#define	GPT1_ENABLE		GPT1_REG(0x0008)
-#define	GPT1_CLEAR		GPT1_REG(0x000C)
-*/
+
 #define	DGT_MATCH_VAL		DGT_REG(0x0000)
 #define	DGT_COUNT_VAL		DGT_REG(0x0004)
 #define	DGT_ENABLE		DGT_REG(0x0008)
@@ -86,7 +79,15 @@ __FBSDID("$FreeBSD$");
 #define	DGT_ENABLE_CLR_ON_MATCH_EN	2
 #define	DGT_ENABLE_EN			1
 
-#define	SPSS_TIMER_STATUS_DGT_EN	(1 << 0)
+#define	SPSS_TIMER_STATUS_DGT_EN		(1 << 0)
+#define	SPSS_TIMER_STATUS_DGT_CLR_ON_MTCH	(1 << 1)
+#define	SPSS_TIMER_STATUS_DGT_CLR_PEND		(1 << 2)
+#define	SPSS_TIMER_STATUS_DGT_WR_PEND		(1 << 3)
+
+#define	SPSS_TIMER_STATUS_GPT_EN		(1 << 8)
+#define	SPSS_TIMER_STATUS_GPT_CLR_ON_MTCH	(1 << 9)
+#define	SPSS_TIMER_STATUS_GPT_CLR_PEND		(1 << 10)
+#define	SPSS_TIMER_STATUS_GPT_WR_PEND		(1 << 11)
 
 enum {
         DGT_CLK_CTL_DIV_1 = 0,
@@ -112,9 +113,9 @@ struct apq8064_timer_softc {
 
 int apq8064_timer_get_timerfreq(struct apq8064_timer_softc *);
 
-#define timer_read_4(sc, reg)	\
+#define	timer_read_4(sc, reg)	\
 	bus_space_read_4(sc->sc_bst, sc->sc_bsh, reg)
-#define timer_write_4(sc, reg, val)	\
+#define	timer_write_4(sc, reg, val)	\
 	bus_space_write_4(sc->sc_bst, sc->sc_bsh, reg, val)
 
 static u_int	apq8064_timer_get_timecount(struct timecounter *);
@@ -184,19 +185,6 @@ apq8064_timer_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	/* set clock */
-//	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
-
-	/* enable timers */
-	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
-//	timer_write_4(sc, GPT_CLEAR, 0);
-	timer_write_4(sc, GPT_MATCH_VAL, ~0);
-
-//	timer_write_4(sc, DGT_ENABLE, DGT_ENABLE_EN);
-
-//	timer_write_4(sc, GPT1_CLEAR, 0);
-//	timer_write_4(sc, GPT1_ENABLE, GPT_ENABLE_EN);
-
 	sc->timer0_freq = SYS_TIMER_CLKSRC;
 
 	/* Set desired frequency in event timer and timecounter */
@@ -226,6 +214,15 @@ apq8064_timer_attach(device_t dev)
 		    apq8064_timer_timecounter.tc_frequency);
 	}
 
+	/* set clock */
+//	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
+
+	/* enable timers */
+	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
+
+	timer_write_4(sc, GPT_CLEAR, 0);
+	timer_write_4(sc, GPT_MATCH_VAL, ~0);
+
 	apq8064_timer_initialized = 1;
 
 	return (0);
@@ -251,7 +248,7 @@ apq8064_timer_timer_start(struct eventtimer *et, sbintime_t first,
 		count = sc->sc_period;
 
 	/* Update timer values */
-//	timer_write_4(sc, DGT_CLEAR, 0);
+	timer_write_4(sc, DGT_CLEAR, 0);
 	timer_write_4(sc, DGT_MATCH_VAL, count);
 
 	val = timer_read_4(sc, DGT_ENABLE);
@@ -281,11 +278,11 @@ apq8064_timer_timer_stop(struct eventtimer *et)
 	val = timer_read_4(sc, DGT_ENABLE);
 	val &= ~DGT_ENABLE_EN;
 	timer_write_4(sc, DGT_ENABLE, val);
-//	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
-//		;
-//        timer_write_4(sc, DGT_CLEAR, 0);
-//	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
-//		;
+	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+		;
+        timer_write_4(sc, DGT_CLEAR, 0);
+	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+		;
 	sc->sc_period = 0;
 
 	return (0);
@@ -377,21 +374,10 @@ DELAY(int usec)
 				cpufunc_nullop();
 		return;
 	}
-/*
-	timer_write_4(apq8064_timer_sc, GPT_CLEAR, 0);
-	timer_write_4(apq8064_timer_sc, GPT_ENABLE, 0);
-	while (timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL) != 0)
-		;
-
-	timer_write_4(apq8064_timer_sc, GPT_ENABLE, GPT_ENABLE_EN);
-*/
 	now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
 	end = now + (apq8064_timer_sc->timer0_freq / 1000000) * (usec + 1);
 
 	while (now < end)
 		now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
-
-//	timer_write_4(apq8064_timer_sc, GPT_ENABLE, 0);
-//	timer_write_4(apq8064_timer_sc, GPT_CLEAR, 0);
 }
 
