@@ -154,9 +154,9 @@ int krait_timer_get_timerfreq(struct krait_timer_softc *);
 	bus_space_write_4(sc->sc_bst, sc->sc_bsh, reg, val)
 
 static u_int	krait_timer_get_timecount(struct timecounter *);
-static int	krait_timer_timer_start(struct eventtimer *,
+static int	krait_timer_start(struct eventtimer *,
     sbintime_t first, sbintime_t period);
-static int	krait_timer_timer_stop(struct eventtimer *);
+static int	krait_timer_stop(struct eventtimer *);
 
 static int krait_timer_initialized = 0;
 static int krait_timer_hardclock(void *);
@@ -230,8 +230,8 @@ krait_timer_attach(device_t dev)
 	sc->et.et_quality = 1000;
 	sc->et.et_min_period = (0x00000005LLU << 32) / sc->et.et_frequency;
 	sc->et.et_max_period = (0xfffffffeLLU << 32) / sc->et.et_frequency;
-	sc->et.et_start = krait_timer_timer_start;
-	sc->et.et_stop = krait_timer_timer_stop;
+	sc->et.et_start = krait_timer_start;
+	sc->et.et_stop = krait_timer_stop;
 	sc->et.et_priv = sc;
 	et_register(&sc->et);
 
@@ -267,7 +267,7 @@ krait_timer_attach(device_t dev)
 }
 
 static int
-krait_timer_timer_start(struct eventtimer *et, sbintime_t first,
+krait_timer_start(struct eventtimer *et, sbintime_t first,
     sbintime_t period)
 {
 	struct krait_timer_softc *sc;
@@ -338,7 +338,7 @@ krait_timer_timer_start(struct eventtimer *et, sbintime_t first,
 }
 
 static int
-krait_timer_timer_stop(struct eventtimer *et)
+krait_timer_stop(struct eventtimer *et)
 {
 	struct krait_timer_softc *sc;
 	uint32_t val;
