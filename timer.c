@@ -52,13 +52,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/kdb.h>
 
 /*
- * Use GPT timer for event timer and 
+ * Use GPT timer for event timer and
  * DGT timer for delay and timecounter.
  * Use global krait mpcore timer address.
- * There are also per core timers and that seems to be used as 
+ * There are also per core timers and that seems to be used as
  * local timers.
  *
- * Android source says:  
+ * Android source says:
  * 0-15:  STI/SGI (software triggered/generated interrupts)
  * 16-31: PPI (private peripheral interrupts)
  * 32+:   SPI (shared peripheral interrupts)
@@ -112,20 +112,20 @@ __FBSDID("$FreeBSD$");
 
 /* 
  * PXO clock source is 27MHz.
- * It is possible for the AHB clock to run at as slow as 5 MHz 
- * using settings of the Global Clock Controller. The debug timer 
- * counter can also run at 5 MHz (TCXO divided by 4). 
+ * It is possible for the AHB clock to run at as slow as 5 MHz
+ * using settings of the Global Clock Controller. The debug timer
+ * counter can also run at 5 MHz (TCXO divided by 4).
  * However, due to the synchronization circuit using the edge detect,
- * the timer should always run at least 4x slower than the AHB clock. 
- * Thus, if the timer's use is required by the system, the divider 
- * should be set to divide by 4 and the slowest usable AHB frequency 
+ * the timer should always run at least 4x slower than the AHB clock.
+ * Thus, if the timer's use is required by the system, the divider
+ * should be set to divide by 4 and the slowest usable AHB frequency
  * is 20MHz. The timer would run at 5MHz in this case.
  */
 enum {
-        DGT_CLK_CTL_DIV_1 = 0,
-        DGT_CLK_CTL_DIV_2 = 1,
-        DGT_CLK_CTL_DIV_3 = 2,
-        DGT_CLK_CTL_DIV_4 = 3,
+	DGT_CLK_CTL_DIV_1 = 0,
+	DGT_CLK_CTL_DIV_2 = 1,
+	DGT_CLK_CTL_DIV_3 = 2,
+	DGT_CLK_CTL_DIV_4 = 3,
 };
 
 /*
@@ -214,8 +214,8 @@ krait_timer_attach(device_t dev)
 	sc->sc_bsh = rman_get_bushandle(sc->res[0]);
 
 	/* Setup and enable the timer interrupt */
-	err = bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK, krait_timer_hardclock,
-	    NULL, sc, &sc->sc_ih);
+	err = bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK,
+	    krait_timer_hardclock, NULL, sc, &sc->sc_ih);
 	if (err != 0) {
 		bus_release_resources(dev, krait_timer_spec, sc->res);
 		device_printf(dev, "Unable to setup the clock irq handler, "
@@ -244,11 +244,12 @@ krait_timer_attach(device_t dev)
 	tc_init(&krait_timer_timecounter);
 
 	if (bootverbose) {
-		device_printf(sc->sc_dev, "clock: hz=%d stathz = %d\n", hz, stathz);
+		device_printf(sc->sc_dev, "clock: hz=%d stathz = %d\n",
+		    hz, stathz);
 
-		device_printf(sc->sc_dev, "event timer clock frequency %u\n", 
+		device_printf(sc->sc_dev, "event timer clock frequency %u\n",
 		    sc->timer0_freq);
-		device_printf(sc->sc_dev, "timecounter clock frequency %lld\n", 
+		device_printf(sc->sc_dev, "timecounter clock frequency %lld\n",
 		    krait_timer_timecounter.tc_frequency);
 	}
 	/* Set clock for DGT timer */
@@ -287,21 +288,21 @@ krait_timer_start(struct eventtimer *et, sbintime_t first,
 	else
 		count = sc->sc_period;
 
-	/* 
+	/*
 	 * Update match value.
-	 * The general purpose timer will signal interrupt 
+	 * The general purpose timer will signal interrupt
 	 * when its counter value has reached the value stored
 	 * in the MTCH register.
 	 */
 	timer_write_4(sc, GPT_MATCH_VAL, count);
-	/* 
-	 * CLR register is a one-shot command register that, 
-	 * when written with any value, resets the timer to a value of 0. 
+	/*
+	 * CLR register is a one-shot command register that,
+	 * when written with any value, resets the timer to a value of 0.
 	 * This occurs regardless of the state of the GPT_EN/DGT_EN register
 	 */
 	timer_write_4(sc, GPT_CLEAR, 0);
 
-	/* 
+	/*
 	 * Set timer mode and enable GPT timer.
 	 * When bit GPT_ENABLE_CLR_ON_MATCH_EN is set,
 	 * the timer will clear when it reaches the match value.
@@ -319,9 +320,9 @@ krait_timer_start(struct eventtimer *et, sbintime_t first,
 	val |= GPT_ENABLE_EN;
 	timer_write_4(sc, GPT_ENABLE, val);
 
-	/* 
-	 * Enable DGT timer and use it in free running mode 
-	 * for timecounter and delay 
+	/*
+	 * Enable DGT timer and use it in free running mode
+	 * for timecounter and delay.
 	 */
 	val = timer_read_4(sc, DGT_ENABLE);
 	val |= DGT_ENABLE_EN;
@@ -330,7 +331,7 @@ krait_timer_start(struct eventtimer *et, sbintime_t first,
 	/* Load maximum value to MTCH register */
 	timer_write_4(sc, DGT_MATCH_VAL, ~0);
 
-	/* 
+	/*
 	 * XXX: Android/linux uses it in this order.
 	 * Clear the counter.
 	 */
@@ -388,7 +389,7 @@ krait_timer_hardclock(void *arg)
 
 	sc = (struct krait_timer_softc *)arg;
 	
-	/* 
+	/*
 	 * Timers don't support an interrupt enable/disable bit.
 	 * Workaround the lack of an interrupt enable bit by explicitly
 	 * stopping the timer in the interrupt handler when the clockevent
@@ -405,9 +406,9 @@ krait_timer_hardclock(void *arg)
 
 		val = timer_read_4(sc, GPT_ENABLE);
 		/*
-		 * Zero value for bit GPT_ENABLE_CLR_ON_MATCH_EN and 
-		 * sc_period > 0 means timer_start was called with non NULL 
-		 * first value. Now we will set periodic timer with the 
+		 * Zero value for bit GPT_ENABLE_CLR_ON_MATCH_EN and
+		 * sc_period > 0 means timer_start was called with non NULL
+		 * first value. Now we will set periodic timer with the
 		 * given period value.
 		 */
 		if ((val & (1<<1)) == 0 && sc->sc_period > 0) {
@@ -457,26 +458,51 @@ static driver_t krait_timer_driver = {
 
 static devclass_t krait_timer_devclass;
 
-DRIVER_MODULE(krait_timer, simplebus, krait_timer_driver, krait_timer_devclass, 0, 0);
+DRIVER_MODULE(krait_timer, simplebus, krait_timer_driver,
+    krait_timer_devclass, 0, 0);
 
 void
 DELAY(int usec)
 {
-	uint32_t counter;
-	uint64_t end, now;
+	int32_t counts, counts_per_usec;
+	uint32_t first, last;
 
-	/* Match this condition for now for debugging purpose */
-	if (1 || !krait_timer_initialized) {
+	/*
+	 * Check the timers are setup, if not just
+	 * use a for loop for the meantime
+	 */
+	if (krait_timer_sc == NULL) {
 		for (; usec > 0; usec--)
-			for (counter = 50; counter > 0; counter--)
+			for (counts = 200; counts > 0; counts--)
+				/*
+				 * Prevent gcc from optimizing
+				 * out the loop   
+				 */
 				cpufunc_nullop();
 		return;
 	}
-	/* User DGT timer for delay */
-	now = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
-	end = now + (krait_timer_sc->timer0_freq / 1000000) * (usec + 1);
 
-	while (now < end)
-		now = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
+	/* Get the number of times to count */
+	counts_per_usec =
+	    ((krait_timer_timecounter.tc_frequency / 1000000) + 1);
+
+	/*
+	 * Clamp the timeout at a maximum value (about 32 seconds with
+	 * a 66MHz clock). *Nobody* should be delay()ing for anywhere
+	 * near that length of time and if they are, they should be hung
+	 * out to dry.
+	 */
+	if (usec >= (0x80000000U / counts_per_usec))
+		counts = (0x80000000U / counts_per_usec) - 1;
+	else
+		counts = usec * counts_per_usec;
+
+	first = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
+
+	while (counts > 0) {
+		last = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
+		counts -= (int32_t)(last - first);
+		first = last;
+	}
 }
 
