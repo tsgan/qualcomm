@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 
 #define	UART_DM_SR_TXRDY		(1 << 2)
 #define	UART_DM_SR_TXEMT		(1 << 3)
+#define	UART_DM_RXSTALE			(1 << 3)
 #define	UART_DM_TX_READY		(1 << 7)
 
 #define	UART_DM_CR(base)		((base) + 0x10)
@@ -75,6 +76,8 @@ __FBSDID("$FreeBSD$");
 
 /* Default DMRX value - any value bigger than FIFO size would be fine */
 #define	UART_DM_DMRX_DEF_VALUE		0x220
+
+#define	UART_DM_MISR(base)		((base) + 0x10)
 
 /*
  * The base address of the uart registers.
@@ -122,6 +125,13 @@ ub_getc(void)
 		uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
 		    UART_DM_CMD_RESET_ERR_STAT);
 
+	/* Check if we've received stale event */
+//	if (uart_getreg((uint32_t *)UART_DM_MISR(apq8064_uart_base)) &
+//	    UART_DM_RXSTALE) {
+//		/* Send command to reset stale interrupt */
+//		uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+//		    UART_DM_CMD_RES_STALE_INT);
+//	}
 	if (!word) {
 		/*
 		 * Read from FIFO only if it's a first read or all four
@@ -142,15 +152,27 @@ ub_putc(unsigned char c)
 		ub_putc('\r');
 
 	/* Check TX FIFO is empty. */
-	while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
-	    UART_DM_SR_TXEMT))
-		__asm __volatile("nop");
-	/* Wait until TX is ready */
+	if (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+	    UART_DM_SR_TXEMT)) {
+		/* Wait until TX is ready */
+		while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
+		    UART_DM_SR_TXRDY))
+			__asm __volatile("nop");
+	}
+
+	/* Write number of char, 1 in this case */
+	uart_setreg((uint32_t *)(apq8064_uart_base + 0x40), 1);
+
+	/* Clear TX_READY interrupt */
+//	uart_setreg((uint32_t *)UART_DM_CR(apq8064_uart_base),
+//	    UART_DM_GCMD_RES_TX_RDY_INT);
+
+	/* Wait till TX FIFO has space */
 	while (!(uart_getreg((uint32_t *)UART_DM_SR(apq8064_uart_base)) &
 	    UART_DM_SR_TXRDY))
 		__asm __volatile("nop");
-	/* Write number of char, 1 in this case and char itself */
-	uart_setreg((uint32_t *)(apq8064_uart_base + 0x40), 1);
+
+	/* Write char itself */
 	uart_setreg((uint32_t *)(apq8064_uart_base + 0x70), c);
 }
 
