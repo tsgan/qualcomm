@@ -51,11 +51,32 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/kdb.h>
 
-/**
- * Timer registers addr
+/*
+ * Use GPT timer for event timer and 
+ * DGT timer for delay and timecounter.
+ * Use global krait mpcore timer address.
+ * There are also per core timers and that seems to be used as 
+ * local timers.
  *
+ * Android source says:  
+ * 0-15:  STI/SGI (software triggered/generated interrupts)
+ * 16-31: PPI (private peripheral interrupts)
+ * 32+:   SPI (shared peripheral interrupts)
+ *
+ * #define GIC_PPI_START 16
+ * #define GIC_SPI_START 32
+ *
+ * #define INT_DEBUG_TIMER_EXP	(GIC_PPI_START + 1)
+ * #define INT_GP_TIMER_EXP	(GIC_PPI_START + 2)
+ * #define INT_GP_TIMER2_EXP	(GIC_PPI_START + 3)
+ *
+ * So global timer irqs will be:
+ * Global DGT timer irq: 17
+ * Global GPT0 timer irq: 18
+ * Global GPT1 timer irq: 19
  */
-#define	MSM_TMR_BASE		0xf200A000
+
+#define	MSM_TMR_BASE		0xf200a000
 #define	MSM_GPT_BASE		0x04
 #define	MSM_DGT_BASE		0x24
 #define	SPSS_TIMER_STATUS	0x88
@@ -89,6 +110,17 @@ __FBSDID("$FreeBSD$");
 #define	SPSS_TIMER_STATUS_GPT_CLR_PEND		(1 << 10)
 #define	SPSS_TIMER_STATUS_GPT_WR_PEND		(1 << 11)
 
+/* 
+ * PXO clock source is 27MHz.
+ * It is possible for the AHB clock to run at as slow as 5 MHz 
+ * using settings of the Global Clock Controller. The debug timer 
+ * counter can also run at 5 MHz (TCXO divided by 4). 
+ * However, due to the synchronization circuit using the edge detect,
+ * the timer should always run at least 4x slower than the AHB clock. 
+ * Thus, if the timer's use is required by the system, the divider 
+ * should be set to divide by 4 and the slowest usable AHB frequency 
+ * is 20MHz. The timer would run at 5MHz in this case.
+ */
 enum {
         DGT_CLK_CTL_DIV_1 = 0,
         DGT_CLK_CTL_DIV_2 = 1,
@@ -96,9 +128,10 @@ enum {
         DGT_CLK_CTL_DIV_4 = 3,
 };
 
-//#define	SYS_TIMER_CLKSRC		32768 /* clock source */
-//#define	SYS_TIMER_CLKSRC		6750000 /* clock source */
-#define	SYS_TIMER_CLKSRC		27000000 /* clock source */
+#define SYS_TIMER_CLKSRC		6750000
+
+//#define SYS_TIMER_CLKSRC		32768
+//#define SYS_TIMER_CLKSRC		27000000
 
 struct apq8064_timer_softc {
 	device_t 	sc_dev;
@@ -109,6 +142,7 @@ struct apq8064_timer_softc {
 	uint32_t 	sc_period;
 	uint32_t 	timer0_freq;
 	struct eventtimer et;
+	int		sc_oneshot;
 };
 
 int apq8064_timer_get_timerfreq(struct apq8064_timer_softc *);
@@ -214,25 +248,16 @@ apq8064_timer_attach(device_t dev)
 		device_printf(sc->sc_dev, "timecounter clock frequency %lld\n", 
 		    apq8064_timer_timecounter.tc_frequency);
 	}
-
 	/* set clock */
-//	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
+	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
 
-	/* disable/enable timers */
+	/* First disable timers at attach */
 	val = timer_read_4(sc, DGT_ENABLE);
 	val &= ~DGT_ENABLE_EN;
 	timer_write_4(sc, DGT_ENABLE, val);
 
 	val = timer_read_4(sc, GPT_ENABLE);
 	val &= ~GPT_ENABLE_EN;
-	timer_write_4(sc, GPT_ENABLE, val);
-
-	/* update values */
-	timer_write_4(sc, GPT_MATCH_VAL, ~0);
-	timer_write_4(sc, GPT_CLEAR, 0);
-
-	val = timer_read_4(sc, GPT_ENABLE);
-	val |= GPT_ENABLE_EN | GPT_ENABLE_CLR_ON_MATCH_EN;
 	timer_write_4(sc, GPT_ENABLE, val);
 
 	apq8064_timer_initialized = 1;
@@ -259,21 +284,54 @@ apq8064_timer_timer_start(struct eventtimer *et, sbintime_t first,
 	else
 		count = sc->sc_period;
 
-	/* Update timer values */
-	timer_write_4(sc, DGT_MATCH_VAL, count);
-	timer_write_4(sc, DGT_CLEAR, 0);
+	/* 
+	 * Update match value.
+	 * The general purpose timer will signal interrupt 
+	 * when its counter value has reached the value stored
+	 * in the MTCH register.
+	 */
+	timer_write_4(sc, GPT_MATCH_VAL, count);
+	/* 
+	 * CLR register is a one-shot command register that, 
+	 * when written with any value, resets the timer to a value of 0. 
+	 * This occurs regardless of the state of the GPT_EN/DGT_EN register
+	 */
+	timer_write_4(sc, GPT_CLEAR, 0);
 
-	val = timer_read_4(sc, DGT_ENABLE);
+	/* 
+	 * Set timer mode and enable GPT timer.
+	 * When bit GPT_ENABLE_CLR_ON_MATCH_EN is set,
+	 * the timer will clear when it reaches the match value.
+	 */
+	val = timer_read_4(sc, GPT_ENABLE);
 	if (period != 0) {
 		/* periodic */
-		val |= DGT_ENABLE_CLR_ON_MATCH_EN;
+		sc->sc_oneshot = 0;
+		val |= GPT_ENABLE_CLR_ON_MATCH_EN;
 	} else {
 		/* oneshot */
-		val &= ~DGT_ENABLE_CLR_ON_MATCH_EN;
+		sc->sc_oneshot = 1;
+		val &= ~GPT_ENABLE_CLR_ON_MATCH_EN;
 	}
-	/* Enable timer0 */
+	val |= GPT_ENABLE_EN;
+	timer_write_4(sc, GPT_ENABLE, val);
+
+	/* 
+	 * Enable DGT timer and use it in free running mode 
+	 * for timecounter and delay 
+	 */
+	val = timer_read_4(sc, DGT_ENABLE);
 	val |= DGT_ENABLE_EN;
 	timer_write_4(sc, DGT_ENABLE, val);
+
+	/* Load maximum value to MTCH register */
+	timer_write_4(sc, DGT_MATCH_VAL, ~0);
+
+	/* 
+	 * XXX: Android/linux uses it in this order.
+	 * Clear the counter.
+	 */
+	timer_write_4(sc, DGT_CLEAR, 0);
 
 	return (0);
 }
@@ -286,14 +344,19 @@ apq8064_timer_timer_stop(struct eventtimer *et)
 
 	sc = (struct apq8064_timer_softc *)et->et_priv;
 
-	/* Disable timer0 */
-	val = timer_read_4(sc, DGT_ENABLE);
-	val &= ~DGT_ENABLE_EN;
-	timer_write_4(sc, DGT_ENABLE, val);
-	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+	/* Disable GPT timer */
+	val = timer_read_4(sc, GPT_ENABLE);
+	val &= ~GPT_ENABLE_EN;
+	timer_write_4(sc, GPT_ENABLE, val);
+
+	/* wait until it is disabled */
+	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_GPT_EN)
 		;
-        timer_write_4(sc, DGT_CLEAR, 0);
-	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_DGT_EN)
+	/* Reset GPT timer */
+        timer_write_4(sc, GPT_CLEAR, 0);
+
+	/* XXX: wait until it is disabled */
+	while (timer_read_4(sc, SPSS_TIMER_STATUS) & SPSS_TIMER_STATUS_GPT_EN)
 		;
 	sc->sc_period = 0;
 
@@ -322,27 +385,40 @@ apq8064_timer_hardclock(void *arg)
 
 	sc = (struct apq8064_timer_softc *)arg;
 	
-	/* disable timer */
-	val = timer_read_4(sc, DGT_ENABLE);
-	val &= ~DGT_ENABLE_EN;
-	timer_write_4(sc, DGT_ENABLE, val);
-
-	val = timer_read_4(sc, DGT_ENABLE);
-	/*
-	 * Disabled autoreload and sc_period > 0 means 
-	 * timer_start was called with non NULL first value.
-	 * Now we will set periodic timer with the given period 
-	 * value.
+	/* 
+	 * Timers don't support an interrupt enable/disable bit.
+	 * Workaround the lack of an interrupt enable bit by explicitly
+	 * stopping the timer in the interrupt handler when the clockevent
+	 * is in ONESHOT mode. This should prevent any possibility of the
+	 * timer wrapping and matching again.
 	 */
-	if ((val & (1<<1)) == 0 && sc->sc_period > 0) {
-		/* Update timer */
-		timer_write_4(sc, DGT_MATCH_VAL, sc->sc_period);
 
-		/* Make periodic and enable */
-		val |= DGT_ENABLE_CLR_ON_MATCH_EN | DGT_ENABLE_EN;
-		timer_write_4(sc, DGT_ENABLE, val);
+	if(sc->sc_oneshot) {
+		/* disable GPT timer */
+		val = timer_read_4(sc, GPT_ENABLE);
+		val &= ~GPT_ENABLE_EN;
+		timer_write_4(sc, GPT_ENABLE, val);
+	} else {
+
+		val = timer_read_4(sc, GPT_ENABLE);
+		/*
+		 * Zero value for bit GPT_ENABLE_CLR_ON_MATCH_EN and 
+		 * sc_period > 0 means timer_start was called with non NULL 
+		 * first value. Now we will set periodic timer with the 
+		 * given period value.
+		 */
+		if ((val & (1<<1)) == 0 && sc->sc_period > 0) {
+			/* Update timer */
+			timer_write_4(sc, GPT_MATCH_VAL, sc->sc_period);
+
+			/* Make periodic */
+			sc->sc_oneshot = 0;
+			val |= GPT_ENABLE_CLR_ON_MATCH_EN;
+		}
+		/* Enable GPT timer in any case */
+		val |= GPT_ENABLE_EN;
+		timer_write_4(sc, GPT_ENABLE, val);
 	}
-
 	if (sc->et.et_active)
 		sc->et.et_event_cb(&sc->et, sc->et.et_arg);
 
@@ -357,7 +433,8 @@ apq8064_timer_get_timecount(struct timecounter *tc)
 	if (apq8064_timer_sc == NULL)
 		return (0);
 
-	timecount = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
+	/* Use DGT timer as timecounter */
+	timecount = timer_read_4(apq8064_timer_sc, DGT_COUNT_VAL);
 
 	return (timecount);
 }
@@ -385,16 +462,18 @@ DELAY(int usec)
 	uint32_t counter;
 	uint64_t end, now;
 
+	/* Match this condition for now for debugging purpose */
 	if (1 || !apq8064_timer_initialized) {
 		for (; usec > 0; usec--)
 			for (counter = 50; counter > 0; counter--)
 				cpufunc_nullop();
 		return;
 	}
-	now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
+	/* User DGT timer for delay */
+	now = timer_read_4(apq8064_timer_sc, DGT_COUNT_VAL);
 	end = now + (apq8064_timer_sc->timer0_freq / 1000000) * (usec + 1);
 
 	while (now < end)
-		now = timer_read_4(apq8064_timer_sc, GPT_COUNT_VAL);
+		now = timer_read_4(apq8064_timer_sc, DGT_COUNT_VAL);
 }
 
