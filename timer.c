@@ -132,7 +132,9 @@ enum {
 #define SYS_TIMER_CLKSRC		32768
 #define SYS_TIMER_CLKSRC		27000000
 */
-#define SYS_TIMER_CLKSRC		6750000
+
+#define GPT_TIMER_CLKSRC		19200000
+#define DGT_TIMER_CLKSRC		6750000
 
 struct krait_timer_softc {
 	device_t 	sc_dev;
@@ -221,10 +223,10 @@ krait_timer_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	sc->timer0_freq = SYS_TIMER_CLKSRC;
+	sc->timer0_freq = DGT_TIMER_CLKSRC;
 
 	/* Set desired frequency in event timer and timecounter */
-	sc->et.et_frequency = sc->timer0_freq;
+	sc->et.et_frequency = GPT_TIMER_CLKSRC;
 	sc->et.et_name = "krait_timer Eventtimer";
 	sc->et.et_flags = ET_FLAGS_ONESHOT | ET_FLAGS_PERIODIC;
 	sc->et.et_quality = 1000;
