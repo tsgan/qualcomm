@@ -166,7 +166,7 @@ static int krait_timer_probe(device_t);
 static int krait_timer_attach(device_t);
 
 static struct timecounter krait_timer_timecounter = {
-	.tc_name           = "krait_timer timer0",
+	.tc_name           = "Krait MPCore Timecounter",
 	.tc_get_timecount  = krait_timer_get_timecount,
 	.tc_counter_mask   = ~0u,
 	.tc_frequency      = 0,
@@ -227,10 +227,10 @@ krait_timer_attach(device_t dev)
 
 	/* Set desired frequency in event timer and timecounter */
 	sc->et.et_frequency = GPT_TIMER_CLKSRC;
-	sc->et.et_name = "krait_timer Eventtimer";
+	sc->et.et_name = "Krait MPCore Eventtimer";
 	sc->et.et_flags = ET_FLAGS_ONESHOT | ET_FLAGS_PERIODIC;
 	sc->et.et_quality = 1000;
-	sc->et.et_min_period = (0x00000005LLU << 32) / sc->et.et_frequency;
+	sc->et.et_min_period = (0x00000002LLU << 32) / sc->et.et_frequency;
 	sc->et.et_max_period = (0xfffffffeLLU << 32) / sc->et.et_frequency;
 	sc->et.et_start = krait_timer_start;
 	sc->et.et_stop = krait_timer_stop;
