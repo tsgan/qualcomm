@@ -163,6 +163,7 @@ apq8064_timer_attach(device_t dev)
 {
 	struct apq8064_timer_softc *sc;
 	int err;
+	uint32_t val;
 
 	sc = device_get_softc(dev);
 
@@ -217,11 +218,22 @@ apq8064_timer_attach(device_t dev)
 	/* set clock */
 //	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
 
-	/* enable timers */
-	timer_write_4(sc, GPT_ENABLE, GPT_ENABLE_EN);
+	/* disable/enable timers */
+	val = timer_read_4(sc, DGT_ENABLE);
+	val &= ~DGT_ENABLE_EN;
+	timer_write_4(sc, DGT_ENABLE, val);
 
-	timer_write_4(sc, GPT_CLEAR, 0);
+	val = timer_read_4(sc, GPT_ENABLE);
+	val &= ~GPT_ENABLE_EN;
+	timer_write_4(sc, GPT_ENABLE, val);
+
+	/* update values */
 	timer_write_4(sc, GPT_MATCH_VAL, ~0);
+	timer_write_4(sc, GPT_CLEAR, 0);
+
+	val = timer_read_4(sc, GPT_ENABLE);
+	val |= GPT_ENABLE_EN | GPT_ENABLE_CLR_ON_MATCH_EN;
+	timer_write_4(sc, GPT_ENABLE, val);
 
 	apq8064_timer_initialized = 1;
 
@@ -248,8 +260,8 @@ apq8064_timer_timer_start(struct eventtimer *et, sbintime_t first,
 		count = sc->sc_period;
 
 	/* Update timer values */
-	timer_write_4(sc, DGT_CLEAR, 0);
 	timer_write_4(sc, DGT_MATCH_VAL, count);
+	timer_write_4(sc, DGT_CLEAR, 0);
 
 	val = timer_read_4(sc, DGT_ENABLE);
 	if (period != 0) {
@@ -309,6 +321,11 @@ apq8064_timer_hardclock(void *arg)
 	uint32_t val;
 
 	sc = (struct apq8064_timer_softc *)arg;
+	
+	/* disable timer */
+	val = timer_read_4(sc, DGT_ENABLE);
+	val &= ~DGT_ENABLE_EN;
+	timer_write_4(sc, DGT_ENABLE, val);
 
 	val = timer_read_4(sc, DGT_ENABLE);
 	/*
