@@ -128,7 +128,11 @@ enum {
         DGT_CLK_CTL_DIV_4 = 3,
 };
 
+/*
+#define SYS_TIMER_CLKSRC		32768
 #define SYS_TIMER_CLKSRC		27000000
+*/
+#define SYS_TIMER_CLKSRC		6750000
 
 struct krait_timer_softc {
 	device_t 	sc_dev;
