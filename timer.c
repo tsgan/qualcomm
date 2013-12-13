@@ -255,14 +255,27 @@ krait_timer_attach(device_t dev)
 	/* Set clock for DGT timer */
 	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
 
-	/* First disable timers at attach */
-	val = timer_read_4(sc, DGT_ENABLE);
-	val &= ~DGT_ENABLE_EN;
-	timer_write_4(sc, DGT_ENABLE, val);
-
+	/* First disable GPT timer at attach */
 	val = timer_read_4(sc, GPT_ENABLE);
 	val &= ~GPT_ENABLE_EN;
 	timer_write_4(sc, GPT_ENABLE, val);
+
+	/*
+	 * Enable DGT timer and use it in free running mode
+	 * for timecounter and delay.
+	 */
+	val = timer_read_4(sc, DGT_ENABLE);
+	val |= DGT_ENABLE_EN;
+	timer_write_4(sc, DGT_ENABLE, val);
+
+	/* Load maximum value to MTCH register */
+	timer_write_4(sc, DGT_MATCH_VAL, ~0);
+
+	/*
+	 * XXX: Android/linux uses it in this order.
+	 * Clear the counter.
+	 */
+	timer_write_4(sc, DGT_CLEAR, 0);
 
 	krait_timer_initialized = 1;
 
@@ -319,23 +332,6 @@ krait_timer_start(struct eventtimer *et, sbintime_t first,
 	}
 	val |= GPT_ENABLE_EN;
 	timer_write_4(sc, GPT_ENABLE, val);
-
-	/*
-	 * Enable DGT timer and use it in free running mode
-	 * for timecounter and delay.
-	 */
-	val = timer_read_4(sc, DGT_ENABLE);
-	val |= DGT_ENABLE_EN;
-	timer_write_4(sc, DGT_ENABLE, val);
-
-	/* Load maximum value to MTCH register */
-	timer_write_4(sc, DGT_MATCH_VAL, ~0);
-
-	/*
-	 * XXX: Android/linux uses it in this order.
-	 * Clear the counter.
-	 */
-	timer_write_4(sc, DGT_CLEAR, 0);
 
 	return (0);
 }
