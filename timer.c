@@ -56,7 +56,7 @@ __FBSDID("$FreeBSD$");
  * DGT timer for clocksource.
  * There are also per core timers and that seems to be used as
  * local timers.
- * GPT timer is always on 32khz and considered as sleep timer, so 
+ * GPT timer is always on 32khz and considered as sleep timer, so
  * we will use global DGT timer as event timer and 
  * DGT timer of cpu0 for timecount and delay.
  *
@@ -75,8 +75,8 @@ __FBSDID("$FreeBSD$");
  * Global DGT timer irq: 17
  * cpu0 DGT timer irq: 18
  *
- * However there is no interrupt handling/cleaning for timers.
- *
+ * However there is no interrupt handling/cleaning for timers,
+ * so we may revisit this code sometime later.
  */
 
 #define	MSM_TMR_BASE		0xf200a000
@@ -113,10 +113,7 @@ __FBSDID("$FreeBSD$");
 #define	SPSS_TIMER_STATUS_GPT_WR_PEND		(1 << 11)
 */
 
-#define REG_READ(reg)			(*(volatile uint32_t *)(reg))
-#define REG_WRITE(reg, val)		(*(volatile uint32_t *)(reg) = (val))
-
-/* 
+/*
  * PXO clock source is 27MHz. XO clock source is 19.2MHz
  * It is possible for the AHB clock to run at as slow as 5 MHz
  * using settings of the Global Clock Controller. The debug timer
