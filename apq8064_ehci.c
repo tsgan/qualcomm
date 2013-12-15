@@ -58,12 +58,14 @@ __FBSDID("$FreeBSD$");
 #include <dev/usb/controller/ehci.h>
 #include <dev/usb/controller/ehcireg.h>
 
+#include "hsusb.h"
+
 #define EHCI_HC_DEVSTR			"Qualcomm Integrated USB 2.0 controller"
 
-#define QCOM_READ_4(sc, reg)		\
+#define READ_4(sc, reg)		\
 	bus_space_read_4((sc)->sc_io_tag, (sc)->sc_io_hdl, reg)
 
-#define QCOM_WRITE_4(sc, reg, data)	\
+#define WRITE_4(sc, reg, data)	\
 	bus_space_write_4((sc)->sc_io_tag, (sc)->sc_io_hdl, reg, data)
 
 static device_attach_t qcom_ehci_attach;
@@ -90,6 +92,7 @@ qcom_ehci_attach(device_t self)
 	bus_space_handle_t bsh;
 	int err;
 	int rid;
+	uint32_t val;
 
 	/* initialise some bus fields */
 	sc->sc_bus.parent = self;
@@ -149,10 +152,28 @@ qcom_ehci_attach(device_t self)
 
 	sc->sc_flags |= EHCI_SCFLG_DONTRESET;
 
+	/* ehci phy reset */
+	val = READ_4(sc, USB_PORTSC) & ~PORTSC_PTS_MASK;
+	WRITE_4(sc, USB_PORTSC, val | PORTSC_PTS_ULPI);
+
+	/* reset */
+	WRITE_4(sc, USB_USBCMD, 0x00080000);
+//	WRITE_4(sc, USB_USBCMD, USBCMD_RESET);
+
+	/* select ULPI phy */
+	WRITE_4(sc, USB_PORTSC, 0x80000000);
+
+	/* burst of unspecified len */
+	WRITE_4(sc, USB_AHB_BURST, 0);
+	/* HPROT mode */
+	WRITE_4(sc, USB_AHB_MODE, 0x08);
+	/* Disable streaming mode and select host mode */
+	WRITE_4(sc, USB_USBMODE, 0x13);
+
 	err = ehci_init(sc);
-	if (!err) {
+	if (!err)
 		err = device_probe_and_attach(sc->sc_bus.bdev);
-	}
+
 	if (err) {
 		device_printf(self, "USB init failed err=%d\n", err);
 		goto error;
