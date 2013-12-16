@@ -1,0 +1,19 @@
+Index: gic.c
+===================================================================
+--- gic.c	(revision 259281)
++++ gic.c	(working copy)
+@@ -222,6 +222,14 @@
+ 	/* Enable interrupt distribution */
+ 	gic_d_write_4(GICD_CTLR, 0x01);
+ 
++#ifdef CPU_KRAIT
++	/* 
++	 * Krait CPU PPIs are all edge triggered except 
++	 * AVS_SVICINT and AVS_SVICINTSWDONE.
++	 */
++	gic_d_write_4(GICD_ICFGR(1), 0xffffd7ff);
++	gic_d_write_4(GICD_ISENABLER(0), 0x0000ffff);
++#endif
+ 	return (0);
+ }
+ 
