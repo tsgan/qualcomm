@@ -60,6 +60,26 @@ __FBSDID("$FreeBSD$");
 
 #include "hsusb.h"
 
+#define TLMM_BASE_ADDR      0x00800000
+
+#define GPIO_CONFIG_ADDR(x) (0x1000 + (x)*0x10)
+#define GPIO_IN_OUT_ADDR(x) (0x1004 + (x)*0x10)
+
+struct qcom_ehci_softc {
+        ehci_softc_t            base;
+        struct resource         *res[3]; 
+        bus_space_tag_t         gpio_bst;
+        bus_space_handle_t      gpio_bsh;
+
+};
+
+static struct resource_spec qcom_ehci_spec[] = {
+        { SYS_RES_MEMORY,       0,      RF_ACTIVE },
+        { SYS_RES_MEMORY,       1,      RF_ACTIVE },
+        { SYS_RES_IRQ,          0,      RF_ACTIVE },
+        { -1, 0 }
+};
+
 #define EHCI_HC_DEVSTR			"Qualcomm Integrated USB 2.0 controller"
 
 #define READ_4(sc, reg)		\
@@ -73,6 +93,57 @@ static device_detach_t qcom_ehci_detach;
 
 bs_r_1_proto(reversed);
 bs_w_1_proto(reversed);
+
+/* GPIO TLMM: Direction */
+#define QGPIO_INPUT      0
+#define QGPIO_OUTPUT     1
+
+/* GPIO TLMM: Pullup/Pulldown */ 
+#define QGPIO_NO_PULL    0
+#define QGPIO_PULL_DOWN  1
+#define QGPIO_KEEPER     2
+#define QGPIO_PULL_UP    3
+
+/* GPIO TLMM: Drive Strength */
+#define QGPIO_2MA        0
+#define QGPIO_4MA        1
+#define QGPIO_6MA        2
+#define QGPIO_8MA        3
+#define QGPIO_10MA       4
+#define QGPIO_12MA       5
+#define QGPIO_14MA       6
+#define QGPIO_16MA       7
+
+/* GPIO TLMM: Status */
+#define QGPIO_ENABLE     1
+#define QGPIO_DISABLE    0
+
+void gpio_tlmm_config(struct qcom_ehci_softc *esc, uint32_t gpio, uint8_t func,
+                      uint8_t dir, uint8_t pull,
+                      uint8_t drvstr, uint32_t enable);
+void gpio_set(struct qcom_ehci_softc *esc, uint32_t gpio, uint32_t dir);
+
+
+void gpio_tlmm_config(struct qcom_ehci_softc *esc, uint32_t gpio, uint8_t func,
+                      uint8_t dir, uint8_t pull,
+                      uint8_t drvstr, uint32_t enable)
+{
+        unsigned int val = 0;
+
+        val |= pull;
+        val |= func << 2;
+        val |= drvstr << 6;
+        val |= enable << 9;
+        bus_space_write_4(esc->gpio_bst, esc->gpio_bsh, GPIO_CONFIG_ADDR(gpio), val);
+        return;
+}
+
+void gpio_set(struct qcom_ehci_softc *esc, uint32_t gpio, uint32_t dir)
+{
+
+        bus_space_write_4(esc->gpio_bst, esc->gpio_bsh, GPIO_IN_OUT_ADDR(gpio), dir);
+        return;
+}
 
 static int
 qcom_ehci_probe(device_t self)
@@ -88,13 +159,14 @@ qcom_ehci_probe(device_t self)
 static int
 qcom_ehci_attach(device_t self)
 {
-	ehci_softc_t *sc = device_get_softc(self);
+	ehci_softc_t *sc;
+        struct qcom_ehci_softc *esc;
 	bus_space_handle_t bsh;
 	int err;
-	int rid;
 	uint32_t val;
 
-	/* initialise some bus fields */
+        esc = device_get_softc(self);
+        sc = &esc->base;
 	sc->sc_bus.parent = self;
 	sc->sc_bus.devices = sc->sc_devices;
 	sc->sc_bus.devices_max = EHCI_MAX_DEVICES;
@@ -107,31 +179,24 @@ qcom_ehci_attach(device_t self)
 
 	sc->sc_bus.usbrev = USB_REV_2_0;
 
-	rid = 0;
-	sc->sc_io_res = bus_alloc_resource_any(self, SYS_RES_MEMORY, &rid, RF_ACTIVE);
-	if (!sc->sc_io_res) {
-		device_printf(self, "Could not map memory\n");
-		goto error;
-	}
+        if (bus_alloc_resources(self, qcom_ehci_spec, esc->res)) {
+                device_printf(self, "could not allocate resources\n");
+                return (ENXIO);
+        }
+        /* EHCI registers */
+        sc->sc_io_tag = rman_get_bustag(esc->res[0]);
+        bsh = rman_get_bushandle(esc->res[0]);
+        sc->sc_io_size = rman_get_size(esc->res[0]);
 
-	sc->sc_io_tag = rman_get_bustag(sc->sc_io_res);
-	sc->sc_io_hdl = rman_get_bushandle(sc->sc_io_res);
-	bsh = rman_get_bushandle(sc->sc_io_res);
-
-	sc->sc_io_size = rman_get_size(sc->sc_io_res);
+        /* GPIO */
+        esc->gpio_bst = rman_get_bustag(esc->res[1]);
+        esc->gpio_bsh = rman_get_bushandle(esc->res[1]);
 
 	if (bus_space_subregion(sc->sc_io_tag, bsh, 0x100,
 	    sc->sc_io_size, &sc->sc_io_hdl) != 0)
 		panic("%s: unable to subregion USB host registers",
 		    device_get_name(self));
 
-	rid = 0;
-	sc->sc_irq_res = bus_alloc_resource_any(self, SYS_RES_IRQ, &rid,
-	    RF_SHAREABLE | RF_ACTIVE);
-	if (sc->sc_irq_res == NULL) {
-		device_printf(self, "Could not allocate irq\n");
-		goto error;
-	}
 	sc->sc_bus.bdev = device_add_child(self, "usbus", -1);
 	if (!sc->sc_bus.bdev) {
 		device_printf(self, "Could not add USB device\n");
@@ -142,7 +207,7 @@ qcom_ehci_attach(device_t self)
 
 	sprintf(sc->sc_vendor, "Qualcomm");
 
-	err = bus_setup_intr(self, sc->sc_irq_res, INTR_TYPE_BIO | INTR_MPSAFE,
+	err = bus_setup_intr(self, esc->res[2], INTR_TYPE_BIO | INTR_MPSAFE,
 	    NULL, (driver_intr_t *)ehci_interrupt, sc, &sc->sc_intr_hdl);
 	if (err) {
 		device_printf(self, "Could not setup irq, %d\n", err);
@@ -152,14 +217,19 @@ qcom_ehci_attach(device_t self)
 
 	sc->sc_flags |= EHCI_SCFLG_DONTRESET;
 
+        /* Configure GPIO for output */ 
+        gpio_tlmm_config(esc, 77, 0, QGPIO_OUTPUT, QGPIO_NO_PULL, QGPIO_8MA, QGPIO_ENABLE);
+
+        /* Output High */
+        gpio_set(esc, 77, 2);
+
 	/* ehci phy reset */
 	val = READ_4(sc, USB_PORTSC) & ~PORTSC_PTS_MASK;
 	WRITE_4(sc, USB_PORTSC, val | PORTSC_PTS_ULPI);
+	WRITE_4(sc, USB_USBCMD, USBCMD_RESET);
 
 	/* reset */
 	WRITE_4(sc, USB_USBCMD, 0x00080000);
-//	WRITE_4(sc, USB_USBCMD, USBCMD_RESET);
-
 	/* select ULPI phy */
 	WRITE_4(sc, USB_PORTSC, 0x80000000);
 
@@ -167,9 +237,18 @@ qcom_ehci_attach(device_t self)
 	WRITE_4(sc, USB_AHB_BURST, 0);
 	/* HPROT mode */
 	WRITE_4(sc, USB_AHB_MODE, 0x08);
+
+	/* disable BAM */
+	WRITE_4(sc, USB_GENCONFIG, (1 << 13));
+
+//	READ_4(sc, USB_DCCPARAMS);
 	/* Disable streaming mode and select host mode */
 	WRITE_4(sc, USB_USBMODE, 0x13);
 
+	/* go to RUN mode (D+ pullup enable) */
+	WRITE_4(sc, USB_USBCMD, 0x00080000);
+
+//	breakpoint();
 	err = ehci_init(sc);
 	if (!err)
 		err = device_probe_and_attach(sc->sc_bus.bdev);
