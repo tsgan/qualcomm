@@ -78,8 +78,7 @@
 		timer@0200a000 {
 			compatible = "qcom,msm-timer";
 			interrupts = < 17 18 >;
-			reg = 	<0x0200a000 0x100>,
-				<0x0208a000 0x100>;
+			reg = 	<0x0200a000 0x100>;
 			interrupt-parent = <&GIC>;
 		};
 
@@ -96,7 +95,7 @@
 			interrupts = < 261 >;
 			interrupt-parent = <&GIC>;
 		};
-
+/*
 		usb3: usb@12520000 {
 			compatible = "qcom,usb-ehci", "usb-ehci";
 			reg = <0x12520000 0x2000>;
@@ -110,7 +109,7 @@
 			interrupts = < 247 >;
 			interrupt-parent = <&GIC>;
 		};
-
+*/
 		UART0: serial@16440000 {
 			status = "okay";
 			compatible = "qcom,uart-dm";
