@@ -366,14 +366,14 @@ DRIVER_MODULE(krait_timer, simplebus, krait_timer_driver,
 void
 DELAY(int usec)
 {
-        int32_t counts, counts_per_usec;
-        uint32_t first, last;
+        int32_t counts;
+        uint32_t end, now;
 
 	/*
 	 * Check the timers are setup, if not just
 	 * use a for loop for the meantime
 	 */
-	if (krait_timer_sc == NULL) {
+	if (!krait_timer_initialized) {
 		for (; usec > 0; usec--)
 			for (counts = 200; counts > 0; counts--)
 				/*
@@ -384,29 +384,12 @@ DELAY(int usec)
 		return;
 	}
 
-        /* Get the number of times to count */
-        counts_per_usec =
-            ((krait_timer_timecounter.tc_frequency / 1000000) + 1);
+        now = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
+        end = now + (krait_timer_sc->timer0_freq / 1000000) * (usec + 1);
 
-        /*
-         * Clamp the timeout at a maximum value (about 32 seconds with
-         * a 66MHz clock). *Nobody* should be delay()ing for anywhere
-         * near that length of time and if they are, they should be hung
-         * out to dry.
-         */
-        if (usec >= (0x80000000U / counts_per_usec))
-                counts = (0x80000000U / counts_per_usec) - 1;
-        else
-                counts = usec * counts_per_usec;
-
-        /* use DGT timer for delay */
-        first = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
-
-        while (counts > 0) {
-                last = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
-printf("------------- counts: %d--------------\n", counts);
-                counts -= (int32_t)(last - first);
-                first = last;
-        }
+        while (now < end) {
+                now = timer_read_4(krait_timer_sc, DGT_COUNT_VAL);
+		printf("------------now: %d, end: %d-----------------\n", now, end);
+	}
 }
 
