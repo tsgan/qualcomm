@@ -57,61 +57,53 @@ __FBSDID("$FreeBSD$");
  * There are also per core timers and that seems to be used as
  * local timers.
  * GPT timer is always on 32khz and considered as sleep timer, so
- * we will use global DGT timer as event timer and 
- * DGT timer of cpu0 for timecount and delay.
+ * it will be used for timecount and delay.
+ * We will use global DGT timer as event timer.
  *
  * Android source says:
  * 0-15:  STI/SGI (software triggered/generated interrupts)
  * 16-31: PPI (private peripheral interrupts)
  * 32+:   SPI (shared peripheral interrupts)
  *
- * #define GIC_PPI_START 16
- * #define GIC_SPI_START 32
+ * #define GIC_PPI_START 	16
+ * #define GIC_SPI_START 	32
  *
  * #define INT_DEBUG_TIMER_EXP	(GIC_PPI_START + 1)
  * #define INT_GP_TIMER_EXP	(GIC_PPI_START + 2)
  *
  * So timer irqs will be:
- * Global DGT timer irq: 17
- * cpu0 DGT timer irq: 18
+ * Global DGT timer irq: 	17
+ * Global GPT timer irq: 	18
  *
- * However there is no interrupt handling/cleaning for timers,
- * so we may revisit this code sometime later.
  */
 
-#define	MSM_TMR_BASE		0xf200a000
+#define	GPT_MATCH_VAL				0x04
+#define	GPT_COUNT_VAL				0x08
+#define	GPT_ENABLE				0x0c
+#define	GPT_CLEAR				0x10
 
-/*
-#define	GPT_MATCH_VAL		0x04
-#define	GPT_COUNT_VAL		0x08
-#define	GPT_ENABLE		0x0c
-#define	GPT_CLEAR		0x10
-*/
+#define	DGT_MATCH_VAL				0x24
+#define	DGT_COUNT_VAL				0x28
+#define	DGT_ENABLE				0x2c
+#define	DGT_CLEAR				0x30
+#define	DGT_CLK_CTL				0x34
 
-#define	DGT_MATCH_VAL		0x24
-#define	DGT_COUNT_VAL		0x28
-#define	DGT_ENABLE		0x2c
-#define	DGT_CLEAR		0x30
-#define	DGT_CLK_CTL		0x34
+#define	SPSS_TIMER_STATUS			0x88
 
-#define	SPSS_TIMER_STATUS	0x88
-
-#define	DGT_ENABLE_CLR_ON_MATCH_EN	2
-#define	DGT_ENABLE_EN			1
+#define	DGT_ENABLE_CLR_ON_MATCH_EN		2
+#define	DGT_ENABLE_EN				1
 
 #define	SPSS_TIMER_STATUS_DGT_EN		(1 << 0)
 #define	SPSS_TIMER_STATUS_DGT_CLR_ON_MTCH	(1 << 1)
 #define	SPSS_TIMER_STATUS_DGT_CLR_PEND		(1 << 2)
 #define	SPSS_TIMER_STATUS_DGT_WR_PEND		(1 << 3)
 
-/*
-#define	GPT_ENABLE_CLR_ON_MATCH_EN	2
-#define	GPT_ENABLE_EN			1
+#define	GPT_ENABLE_CLR_ON_MATCH_EN		2
+#define	GPT_ENABLE_EN				1
 #define	SPSS_TIMER_STATUS_GPT_EN		(1 << 8)
 #define	SPSS_TIMER_STATUS_GPT_CLR_ON_MTCH	(1 << 9)
 #define	SPSS_TIMER_STATUS_GPT_CLR_PEND		(1 << 10)
 #define	SPSS_TIMER_STATUS_GPT_WR_PEND		(1 << 11)
-*/
 
 /*
  * PXO clock source is 27MHz. XO clock source is 19.2MHz
@@ -131,22 +123,15 @@ enum {
 	DGT_CLK_CTL_DIV_4 = 3,
 };
 
-/*
-#define SYS_TIMER_CLKSRC		32768
-#define SYS_TIMER_CLKSRC		27000000
-*/
-
-#define GPT_TIMER_CLKSRC		19200000
-#define DGT_TIMER_CLKSRC		6750000
+#define	GPT_TIMER_CLKSRC		32768
+#define	DGT_TIMER_CLKSRC		6750000
 
 struct krait_timer_softc {
 	device_t 	sc_dev;
-	struct resource *res[4];
+	struct resource *res[3];
 	bus_space_tag_t sc_bst;
-	bus_space_tag_t sc_bst0;
 	bus_space_handle_t sc_bsh;
-	bus_space_handle_t sc_bsh0;
-	void 		*sc_ih;		/* interrupt handler */
+	void 		*sc_ih;
 	uint32_t 	sc_period;
 	uint32_t 	timer0_freq;
 	struct eventtimer et;
@@ -160,11 +145,6 @@ int krait_timer_get_timerfreq(struct krait_timer_softc *);
 #define	timer_write_4(sc, reg, val)	\
 	bus_space_write_4(sc->sc_bst, sc->sc_bsh, reg, val)
 
-#define	timer0_read_4(sc, reg)	\
-	bus_space_read_4(sc->sc_bst0, sc->sc_bsh0, reg)
-#define	timer0_write_4(sc, reg, val)	\
-	bus_space_write_4(sc->sc_bst0, sc->sc_bsh0, reg, val)
-
 static u_int	krait_timer_get_timecount(struct timecounter *);
 static int	krait_timer_start(struct eventtimer *,
     sbintime_t first, sbintime_t period);
@@ -177,7 +157,7 @@ static int krait_timer_probe(device_t);
 static int krait_timer_attach(device_t);
 
 static struct timecounter krait_timer_timecounter = {
-	.tc_name           = "Krait MPCore Timecounter",
+	.tc_name           = "Krait Subsystem Timecounter",
 	.tc_get_timecount  = krait_timer_get_timecount,
 	.tc_counter_mask   = ~0u,
 	.tc_frequency      = 0,
@@ -188,7 +168,6 @@ struct krait_timer_softc *krait_timer_sc = NULL;
 
 static struct resource_spec krait_timer_spec[] = {
 	{ SYS_RES_MEMORY,	0,	RF_ACTIVE },
-	{ SYS_RES_MEMORY,	1,	RF_ACTIVE },
 	{ SYS_RES_IRQ,		0,	RF_ACTIVE },
 	{ SYS_RES_IRQ,		1,	RF_ACTIVE },
 	{ -1, 0 }
@@ -204,7 +183,7 @@ krait_timer_probe(device_t dev)
 	if (!ofw_bus_is_compatible(dev, "qcom,msm-timer"))
 		return (ENXIO);
 
-	device_set_desc(dev, "Qualcomm KRAIT timer");
+	device_set_desc(dev, "Qualcomm KRAIT GPT/DGTtimer");
 	return (BUS_PROBE_DEFAULT);
 }
 
@@ -225,11 +204,9 @@ krait_timer_attach(device_t dev)
 	sc->sc_dev = dev;
 	sc->sc_bst = rman_get_bustag(sc->res[0]);
 	sc->sc_bsh = rman_get_bushandle(sc->res[0]);
-	sc->sc_bst0 = rman_get_bustag(sc->res[1]);
-	sc->sc_bsh0 = rman_get_bushandle(sc->res[1]);
 
 	/* Setup and enable the timer interrupt */
-	err = bus_setup_intr(dev, sc->res[2], INTR_TYPE_CLK,
+	err = bus_setup_intr(dev, sc->res[1], INTR_TYPE_CLK,
 	    krait_timer_hardclock, NULL, sc, &sc->sc_ih);
 	if (err != 0) {
 		bus_release_resources(dev, krait_timer_spec, sc->res);
@@ -237,7 +214,7 @@ krait_timer_attach(device_t dev)
 		    "err = %d\n", err);
 		return (ENXIO);
 	}
-	err = bus_setup_intr(dev, sc->res[3], INTR_TYPE_CLK,
+	err = bus_setup_intr(dev, sc->res[2], INTR_TYPE_CLK,
 	    krait_timer0_hardclock, NULL, sc, &sc->sc_ih);
 	if (err != 0) {
 		bus_release_resources(dev, krait_timer_spec, sc->res);
@@ -246,11 +223,11 @@ krait_timer_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	sc->timer0_freq = DGT_TIMER_CLKSRC;
+	sc->timer0_freq = GPT_TIMER_CLKSRC;
 
 	/* Set desired frequency in event timer and timecounter */
 	sc->et.et_frequency = DGT_TIMER_CLKSRC;
-	sc->et.et_name = "Krait MPCore Eventtimer";
+	sc->et.et_name = "Krait Subsystem Eventtimer";
 	sc->et.et_flags = ET_FLAGS_ONESHOT | ET_FLAGS_PERIODIC;
 	sc->et.et_quality = 1000;
 	sc->et.et_min_period = (0x00000002LLU << 32) / sc->et.et_frequency;
@@ -275,9 +252,8 @@ krait_timer_attach(device_t dev)
 		device_printf(sc->sc_dev, "timecounter clock frequency %lld\n",
 		    krait_timer_timecounter.tc_frequency);
 	}
-	/* Set clock for DGT timers */
+	/* Set clock for DGT timer */
 	timer_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
-	timer0_write_4(sc, DGT_CLK_CTL, DGT_CLK_CTL_DIV_4);
 
 	/* First disable global DGT timer at attach */
 	val = timer_read_4(sc, DGT_ENABLE);
@@ -285,21 +261,21 @@ krait_timer_attach(device_t dev)
 	timer_write_4(sc, DGT_ENABLE, val);
 
 	/*
-	 * Enable cpu0 DGT timer and use it in free running mode
+	 * Enable GPT timer and use it in free running mode
 	 * for timecounter and delay.
 	 */
-	val = timer0_read_4(sc, DGT_ENABLE);
-	val |= DGT_ENABLE_EN;
-	timer0_write_4(sc, DGT_ENABLE, val);
+	val = timer_read_4(sc, GPT_ENABLE);
+	val |= GPT_ENABLE_EN;
+	timer_write_4(sc, GPT_ENABLE, val);
 
 	/* Load maximum value to MTCH register */
-	timer0_write_4(sc, DGT_MATCH_VAL, ~0);
+	timer_write_4(sc, GPT_MATCH_VAL, ~0);
 
 	/*
 	 * XXX: Android/linux uses it in this order.
 	 * Clear the counter.
 	 */
-	timer0_write_4(sc, DGT_CLEAR, 0);
+	timer_write_4(sc, GPT_CLEAR, 0);
 
 	krait_timer_initialized = 1;
 
@@ -408,10 +384,6 @@ krait_timer_hardclock(void *arg)
 	uint32_t val;
 
 	sc = (struct krait_timer_softc *)arg;
-	
-	/* Read status register */
-	timer_read_4(sc, SPSS_TIMER_STATUS);
-
 	/*
 	 * Timers don't support an interrupt enable/disable bit.
 	 * Workaround the lack of an interrupt enable bit by explicitly
@@ -419,7 +391,6 @@ krait_timer_hardclock(void *arg)
 	 * is in ONESHOT mode. This should prevent any possibility of the
 	 * timer wrapping and matching again.
 	 */
-
 	if(sc->sc_oneshot) {
 		/* disable DGT timer */
 		val = timer_read_4(sc, DGT_ENABLE);
@@ -459,9 +430,8 @@ krait_timer0_hardclock(void *arg)
 
 	sc = (struct krait_timer_softc *)arg;
 	
-	/* Read status register */
-	timer0_read_4(sc, SPSS_TIMER_STATUS);
-
+	if (bootverbose)
+		printf("--------- hardlock for gpt0 --------\n");
 	if (sc->et.et_active)
 		sc->et.et_event_cb(&sc->et, sc->et.et_arg);
 
@@ -476,8 +446,8 @@ krait_timer_get_timecount(struct timecounter *tc)
 	if (krait_timer_sc == NULL)
 		return (0);
 
-	/* Use cpu0 DGT timer as timecounter */
-	timecount = timer0_read_4(krait_timer_sc, DGT_COUNT_VAL);
+	/* Use GPT timer as timecounter */
+	timecount = timer_read_4(krait_timer_sc, GPT_COUNT_VAL);
 
 	return (timecount);
 }
@@ -503,46 +473,22 @@ DRIVER_MODULE(krait_timer, simplebus, krait_timer_driver,
 void
 DELAY(int usec)
 {
-	int32_t counts, counts_per_usec;
-	uint32_t first, last;
+	int32_t counts;
+	uint64_t curcnt, endcnt, startcnt, ticks;
 
 	/*
 	 * Check the timers are setup, if not just
 	 * use a for loop for the meantime
 	 */
-	if (krait_timer_sc == NULL) {
+	if (!krait_timer_initialized) {
 		for (; usec > 0; usec--)
 			for (counts = 200; counts > 0; counts--)
-				/*
-				 * Prevent gcc from optimizing
-				 * out the loop   
-				 */
 				cpufunc_nullop();
 		return;
 	}
-
-	/* Get the number of times to count */
-	counts_per_usec =
-	    ((krait_timer_timecounter.tc_frequency / 1000000) + 1);
-
-	/*
-	 * Clamp the timeout at a maximum value (about 32 seconds with
-	 * a 66MHz clock). *Nobody* should be delay()ing for anywhere
-	 * near that length of time and if they are, they should be hung
-	 * out to dry.
-	 */
-	if (usec >= (0x80000000U / counts_per_usec))
-		counts = (0x80000000U / counts_per_usec) - 1;
-	else
-		counts = usec * counts_per_usec;
-
-	/* use cpu0 DGT timer for delay */
-	first = timer0_read_4(krait_timer_sc, DGT_COUNT_VAL);
-
-	while (counts > 0) {
-		last = timer0_read_4(krait_timer_sc, DGT_COUNT_VAL);
-		counts -= (int32_t)(last - first);
-		first = last;
-	}
+	ticks = (usec * 33 + 1000 - 33) / 1000;
+	curcnt = startcnt = timer_read_4(krait_timer_sc, GPT_COUNT_VAL);
+	endcnt = startcnt + ticks;
+	while (curcnt < endcnt)
+		curcnt = timer_read_4(krait_timer_sc, GPT_COUNT_VAL);
 }
-
