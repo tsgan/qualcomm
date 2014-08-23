@@ -44,7 +44,7 @@
 	aliases {
 		soc = &SOC;
 		UART0 = &UART0;
-	}
+	};
 
 	SOC: apq8064 {
 		#address-cells = <1>;
@@ -112,17 +112,17 @@
 			interrupt-parent = <&GIC>;
 		};
 */
-		UART0: serial@16440000 {
+		UART0: serial@16640000 {
 			status = "okay";
 			compatible = "qcom,uart-dm";
-			reg = <0x16440000 0x1000>;
+			reg = <0x16640000 0x1000>;
 			reg-shift = <2>;
 			interrupts = <190>;
 			interrupt-parent = <&GIC>;
 			current-speed = <115200>;
 			clock-frequency = < 27000000 >;
 		};
-	}
+	};
 	chosen {
 		bootargs = "-v";
 		stdin = "UART0";
