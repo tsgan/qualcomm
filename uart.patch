@@ -1,0 +1,25 @@
+Index: ../dev/uart/uart.h
+===================================================================
+--- ../dev/uart/uart.h	(revision 259640)
++++ ../dev/uart/uart.h	(working copy)
+@@ -76,6 +76,7 @@
+ extern struct uart_class uart_cdnc_class __attribute__((weak));
+ extern struct uart_class uart_ti8250_class __attribute__((weak));
+ extern struct uart_class uart_vybrid_class __attribute__((weak));
++extern struct uart_class uart_apq8064_class __attribute__((weak));
+
+ #ifdef FDT
+ struct ofw_compat_data;
+Index: ../dev/uart/uart_bus_fdt.c
+===================================================================
+--- ../dev/uart/uart_bus_fdt.c	(revision 259640)
++++ ../dev/uart/uart_bus_fdt.c	(working copy)
+@@ -83,6 +83,7 @@
+ 	{"fsl,imx21-uart",	(uintptr_t)&uart_imx_class},
+ 	{"fsl,mvf600-uart",	(uintptr_t)&uart_vybrid_class},
+ 	{"lpc,uart",		(uintptr_t)&uart_lpc_class},
++	{"qcom,uart-dm",	(uintptr_t)&uart_apq8064_class},
+ 	{"ti,ns16550",		(uintptr_t)&uart_ti8250_class},
+ 	{"ns16550",		(uintptr_t)&uart_ns8250_class},
+ 	{NULL,			(uintptr_t)NULL},
+
