@@ -58,6 +58,11 @@ __FBSDID("$FreeBSD$");
 
 #define	DEF_CLK		1843200
 
+#define GETREG(bas, reg)                                                \
+                bus_space_read_4((bas)->bst, (bas)->bsh, (reg))
+#define SETREG(bas, reg, value)                                         \
+                bus_space_write_4((bas)->bst, (bas)->bsh, (reg), (value))
+
 static int apq8064_uart_param(struct uart_bas *, int, int, int, int);
 
 /*
@@ -71,18 +76,6 @@ static int apq8064_rxready(struct uart_bas *bas);
 static int apq8064_getc(struct uart_bas *bas, struct mtx *mtx);
 
 extern SLIST_HEAD(uart_devinfo_list, uart_devinfo) uart_sysdevs;
-
-
-#define PACK_CHARS_INTO_WORDS(a, cnt, word)  {                                 \
-                                               word = 0;                       \
-                                               for(int j=0; j < (int)cnt; j++) \
-                                               {                               \
-                                                   word |= (a[j] & 0xff)       \
-                                                               << (j * 8);     \
-                                               }                               \
-                                             }
-
-
 
 static int
 apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
@@ -183,6 +176,8 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	/* 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
 	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
 
+	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
+
 	/* Configure Interrupt Mask register IMR */
 	uart_setreg(bas, UART_DM_IMR, UART_DM_IMR_ENABLED);
 
@@ -233,11 +228,10 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	uart_setreg(bas, UART_DM_CR, UART_DM_CR_TX_ENABLE);
 
 	/* Initialize Receive Path */
-	bus_space_write_4(bas->bst, bas->bsh, UART_DM_CR, UART_DM_GCMD_DIS_STALE_EVT);
-	bus_space_write_4(bas->bst, bas->bsh, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
-	bus_space_write_4(bas->bst, bas->bsh, UART_DM_DMRX, UART_DM_DMRX_DEF_VALUE);
-	bus_space_write_4(bas->bst, bas->bsh, UART_DM_CR, UART_DM_GCMD_ENA_STALE_EVT);
-
+	SETREG(bas, UART_DM_CR, UART_DM_GCMD_DIS_STALE_EVT);
+	SETREG(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
+	SETREG(bas, UART_DM_DMRX, UART_DM_DMRX_DEF_VALUE);
+	SETREG(bas, UART_DM_CR, UART_DM_GCMD_ENA_STALE_EVT);
 }
 
 static void
@@ -250,24 +244,22 @@ static void
 apq8064_putc(struct uart_bas *bas, int c)
 {
 
-//	uart_dm_write(bas, &c, 1);
-
         /* Check if transmit FIFO is empty.
          * If not we'll wait for TX_READY interrupt. */
         if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
-                while (!(uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY)) {
+                while (!(uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY))
                         DELAY(1);
-                        /* Kick watchdog? */
-                }
         }
+	/* Clear TX_READY interrupt */
+	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
+
         /* We are here. FIFO is ready to be written. */
         /* Write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
         /* Wait till TX FIFO has space */
-        while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY)) {
+        while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY))
                 DELAY(1);
-        }
 
         /* TX FIFO has space. Write the chars */
         uart_setreg(bas, UART_DM_TF(0), c);
@@ -284,32 +276,16 @@ apq8064_rxready(struct uart_bas *bas)
 static int
 apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 {
-/*
-        int byte;
-        static unsigned int word = 0;
-
-        if (!word) {
-*/
-                /* Read from FIFO only if it's a first read or all the four
-                 * characters out of a word have been read */
-/*
-                if (uart_dm_read(bas, &word) != 0) {
-                        return -1;
-                }
-
-        }
-
-        byte = (int)word & 0xff;
-        word = word >> 8;
-
-        return byte;
-*/
 	int c;
 
         /* Check for Overrun error. We'll just reset Error Status */
-        if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN) {
+        if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
                 uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
-        }
+
+	/* Check RXRDY status bit */
+        while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY))
+		DELAY(1);
+
 	c = uart_getreg(bas, UART_DM_RF(0));
 
 	return (c & 0xff);
@@ -381,8 +357,7 @@ apq8064_bus_transmit(struct uart_softc *sc)
 	uart_unlock(sc->sc_hwmtx);
 
 	/* Clear TX_READY interrupt */
-	bus_space_write_4(sc->sc_bas.bst, sc->sc_bas.bsh,
-	    UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
+//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
 
 	return (0);
 }
@@ -398,10 +373,19 @@ static int
 apq8064_bus_receive(struct uart_softc *sc)
 {
 	struct uart_bas *bas;
+	int c;
 
 	bas = &sc->sc_bas;
-        while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY))
-		uart_rx_put(sc, uart_getreg(bas, UART_DM_RF(0)));
+        while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {
+               	if (uart_rx_full(sc)) {
+	                /* No space left in input buffer */
+                        sc->sc_rxbuf[sc->sc_rxput] = UART_STAT_OVERRUN;
+                        break;
+                }
+
+		c = uart_getreg(bas, UART_DM_RF(0));
+                uart_rx_put(sc, c);
+	}
 
 	return (0);
 }
@@ -428,12 +412,16 @@ apq8064_bus_param(struct uart_softc *sc, int baudrate, int databits,
 static int
 apq8064_bus_ipend(struct uart_softc *sc)
 {
-	uint32_t ints;
-	int reg;
+	struct uart_bas *bas = &sc->sc_bas;
+	uint32_t ints, imr;
 	int ipend;
 
 	uart_lock(sc->sc_hwmtx);
-	ints = bus_space_read_4(sc->sc_bas.bst, sc->sc_bas.bsh, UART_DM_MISR);
+	ints = GETREG(bas, UART_DM_MISR);
+	imr = GETREG(bas, UART_DM_IMR);
+
+	// disable interrupt
+	SETREG(bas, UART_DM_IMR, 0);
 
 	ipend = 0;
 	if (ints & (UART_DM_RXLEV | UART_DM_RXSTALE)) {
@@ -443,13 +431,11 @@ apq8064_bus_ipend(struct uart_softc *sc)
 		if (sc->sc_txbusy != 0)
 			ipend |= SER_INT_TXIDLE;
 
-		/* TX is in TX_READY */
-		reg = bus_space_read_4(sc->sc_bas.bst, sc->sc_bas.bsh,
-		    UART_DM_IMR);
-		reg |= (1 << 7);
-		bus_space_write_4(sc->sc_bas.bst, sc->sc_bas.bsh,
-		    UART_DM_IMR, reg);
+		// TX is in TX_READY
+		imr |= (1 << 7);
 	}
+	// enable back
+	SETREG(bas, UART_DM_IMR, imr);
 
 	uart_unlock(sc->sc_hwmtx);
 	return (ipend);
