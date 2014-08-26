@@ -288,10 +288,6 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
         if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
                 uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
 
-	/* Check RXRDY status bit */
-        while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY))
-		DELAY(1);
-
 	c = uart_getreg(bas, UART_DM_RF(0));
 
 	return (c & 0xff);
