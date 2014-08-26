@@ -244,18 +244,24 @@ static void
 apq8064_putc(struct uart_bas *bas, int c)
 {
 
+	/* 
+	 * Write to NO_CHARS_FOR_TX register number of characters
+	 * to be transmitted. However, before writing TX_FIFO must
+	 * be empty as indicated by TX_READY interrupt in IMR register
+	 */
+
         /* Check if transmit FIFO is empty.
          * If not we'll wait for TX_READY interrupt. */
         if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
                 while (!(uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY))
                         DELAY(1);
         }
-	/* Clear TX_READY interrupt */
-	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
-
         /* We are here. FIFO is ready to be written. */
         /* Write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
+
+	/* Clear TX_READY interrupt */
+	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
 
         /* Wait till TX FIFO has space */
         while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY))
