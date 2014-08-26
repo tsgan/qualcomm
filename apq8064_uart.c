@@ -260,9 +260,6 @@ apq8064_putc(struct uart_bas *bas, int c)
         /* Write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
-	/* Clear TX_READY interrupt */
-	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
-
         /* Wait till TX FIFO has space */
         while (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY))
                 DELAY(1);
@@ -359,7 +356,7 @@ apq8064_bus_transmit(struct uart_softc *sc)
 	uart_unlock(sc->sc_hwmtx);
 
 	/* Clear TX_READY interrupt */
-//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
+	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
 
 	return (0);
 }
