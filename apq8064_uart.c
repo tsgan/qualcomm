@@ -135,7 +135,10 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 		break;
 	}
 
-	uart_setreg(bas, UART_DM_MR2, ulcon);
+//	uart_setreg(bas, UART_DM_MR2, ulcon);
+
+	/* For now always set 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
+	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
 
 	/* Set 115200 for both TX and RX. */;
 	uart_setreg(bas, UART_DM_CSR, 0xff);
@@ -173,10 +176,7 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	/* Hardware flow control isn't supported */
 	uart_setreg(bas, UART_DM_MR1, 0x0);
 
-	/* 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
 	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
-
-	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
 
 	/* Configure Interrupt Mask register IMR */
 	uart_setreg(bas, UART_DM_IMR, UART_DM_IMR_ENABLED);
