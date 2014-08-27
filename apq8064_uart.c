@@ -294,7 +294,7 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 
 	c = uart_getreg(bas, UART_DM_RF(0));
 
-	return (c & 0xff);
+	return (c);
 }
 
 /*
