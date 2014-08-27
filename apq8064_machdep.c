@@ -46,62 +46,48 @@ __FBSDID("$FreeBSD$");
 #include <machine/bus.h>
 #include <machine/devmap.h>
 #include <machine/machdep.h>
+#include <machine/platform.h> 
 
 #include <dev/fdt/fdt_common.h>
 
-/* Start of address space used for bootstrap map */
-#define DEVMAP_BOOTSTRAP_MAP_START	0xF0000000
-
 vm_offset_t
-initarm_lastaddr(void)
+platform_lastaddr(void)
 {
 
-	return (DEVMAP_BOOTSTRAP_MAP_START);
+        return (arm_devmap_lastaddr());
 }
 
 void
-initarm_early_init(void)
+platform_probe_and_attach(void)
 {
 
 }
 
 void
-initarm_gpio_init(void)
+platform_gpio_init(void)
 {
 }
 
 void
-initarm_late_init(void)
+platform_late_init(void)
 {
 
-	/* Enable cache */
-	cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
-	    CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
+        /* Enable cache */
+        cpufunc_control(CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE,
+            CPU_CONTROL_DC_ENABLE|CPU_CONTROL_IC_ENABLE);
 }
 
-#define FDT_DEVMAP_MAX		(1 + 2 + 1 + 1)
-static struct arm_devmap_entry fdt_devmap[FDT_DEVMAP_MAX] = {
-	{ 0, 0, 0, 0, 0, }
-};
 
 /*
- * Construct pmap_devmap[] with DT-derived config data.
+ * Set up static device mappings.
  */
 int
-initarm_devmap_init(void)
+platform_devmap_init(void)
 {
-	int i = 0;
 
-	fdt_devmap[i].pd_va = 0xF6600000;
-	fdt_devmap[i].pd_pa = 0x16600000;
-	fdt_devmap[i].pd_size = 0x100000;
-	fdt_devmap[i].pd_prot = VM_PROT_READ | VM_PROT_WRITE;
-	fdt_devmap[i].pd_cache = PTE_DEVICE;
-	i++;
-
-	arm_devmap_register_table(&fdt_devmap[0]);
-	
-	return (0);
+        arm_devmap_add_entry(0x16600000, 0x00100000);
+        
+        return (0);
 }
 
 struct arm32_dma_range *
@@ -125,3 +111,27 @@ cpu_reset()
 	printf("Reset failed!\n");
 	while (1);
 }
+
+/*
+ * Early putc routine for EARLY_PRINTF support.  To use, add to kernel config:
+ *   option SOCDEV_PA=0x16600000
+ *   option SOCDEV_VA=0x16600000
+ *   option EARLY_PRINTF
+ */
+#if 0
+static void
+apq8064_early_putc(int c)
+{
+        volatile uint32_t * UART_STAT_REG = (uint32_t *)0x16640008;
+        volatile uint32_t * UART_TX_REG   = (uint32_t *)0x16640070;
+        volatile uint32_t * UART_TX_NCHAR_REG   = (uint32_t *)0x16640040;
+        const uint32_t      UART_TXRDY    = (1 << 2);
+
+        while ((*UART_STAT_REG & UART_TXRDY) == 0)
+                continue;
+        *UART_TX_NCHAR_REG = 1;
+        *UART_TX_REG = c;
+}
+early_putc_t *early_putc = apq8064_early_putc;
+
+#endif
