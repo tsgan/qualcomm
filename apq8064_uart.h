@@ -71,7 +71,7 @@ enum UART_DM_BITS_PER_CHAR {
 #define	UART_DM_CSR			(0x08)
 
 /* UART DM TX FIFO Registers - 4 */
-#define	UART_DM_TF(x)			(0x70+(4*(x)))
+#define	UART_DM_TF(x)			(0x70 + (4 * (x)))
 
 /* UART Command Register */
 #define	UART_DM_CR			(0x10)
@@ -138,16 +138,18 @@ enum UART_DM_BITS_PER_CHAR {
 
 /* UART Interrupt Programming Register */
 #define	UART_DM_IPR			(0x18)
-#define	UART_DM_STALE_TIMEOUT_LSB	0x0f
+#define	UART_DM_STALE_TIMEOUT_LSB	(0x0f)
 #define	UART_DM_STALE_TIMEOUT_MSB	0	/* Not used currently */
 
 /* UART Transmit/Receive FIFO Watermark Register */
-#define	UART_DM_TFWR			(0x1C)
+#define	UART_DM_TFWR			(0x1c)
+
 /* Interrupt is generated when FIFO level is less than or equal to this value */
 #define	UART_DM_TFW_VALUE		0
 
 #define	UART_DM_RFWR			(0x20)
-/*Interrupt generated when no of words in RX FIFO is greater than this value */
+
+/* Interrupt generated when no of words in RX FIFO is greater than this value */
 #define	UART_DM_RFW_VALUE		0
 
 /* UART Hunt Character Register */
@@ -157,35 +159,34 @@ enum UART_DM_BITS_PER_CHAR {
 #define	UART_DM_DMRX			(0x34)
 
 /* Default DMRX value - any value bigger than FIFO size would be fine */
-#define	UART_DM_DMRX_DEF_VALUE		0x220
+#define	UART_DM_DMRX_DEF_VALUE		(0x220)
 
 /* Register to enable IRDA function */
 #define	UART_DM_IRDA			(0x38)
 
 /* UART Data Mover Enable Register */
-#define	UART_DM_DMEN			(0x3C)
+#define	UART_DM_DMEN			(0x3c)
 
 /* Number of characters for Transmission */
-#define	UART_DM_NO_CHARS_FOR_TX		(0x040)
+#define	UART_DM_NO_CHARS_FOR_TX		(0x40)
 
 /* UART RX FIFO Base Address */
 #define	UART_DM_BADR			(0x44)
 
 /* UART Status Register */
-#define	UART_DM_SR			(0x008)
+#define	UART_DM_SR			(0x08)
 #define	 UART_DM_SR_RXRDY		(1 << 0)
 #define	 UART_DM_SR_RXFULL		(1 << 1)
 #define	 UART_DM_SR_TXRDY		(1 << 2)
 #define	 UART_DM_SR_TXEMT		(1 << 3)
 #define	 UART_DM_SR_UART_OVERRUN	(1 << 4)
 #define	 UART_DM_SR_PAR_FRAME_ERR	(1 << 5)
-
-#define	UART_DM_RX_BREAK		(1 << 6)
-#define	UART_DM_HUNT_CHAR		(1 << 7)
-#define	UART_DM_RX_BRK_START_LAST	(1 << 8)
+#define	 UART_DM_RX_BREAK		(1 << 6)
+#define	 UART_DM_HUNT_CHAR		(1 << 7)
+#define	 UART_DM_RX_BRK_START_LAST	(1 << 8)
 
 /* UART Receive FIFO Registers - 4 in numbers */
-#define	UART_DM_RF(x)			(0x70 + (4*(x)))
+#define	UART_DM_RF(x)			(0x70 + (4 * (x)))
 
 /* UART Masked Interrupt Status Register */
 #define	UART_DM_MISR			(0x10)
@@ -197,7 +198,7 @@ enum UART_DM_BITS_PER_CHAR {
 #define	UART_DM_RX_TOTAL_SNAP		(0x38)
 
 /* UART TX FIFO Status Register */
-#define	UART_DM_TXFS			(0x4C)
+#define	UART_DM_TXFS			(0x4c)
 #define	 UART_DM_TXFS_STATE_LSB(x)	UART_DM_EXTR_BITS(x,0,6)
 #define	 UART_DM_TXFS_STATE_MSB(x)	UART_DM_EXTR_BITS(x,14,31)
 #define	 UART_DM_TXFS_BUF_STATE(x)	UART_DM_EXTR_BITS(x,7,9)
