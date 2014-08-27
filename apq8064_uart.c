@@ -36,17 +36,17 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/bus.h>
 #include <sys/conf.h>
-#include <sys/cons.h>
+//#include <sys/cons.h>
 #include <sys/kdb.h>
-#include <sys/tty.h>
-#include <sys/rman.h>
+//#include <sys/tty.h>
+//#include <sys/rman.h>
 #include <machine/bus.h>
 #include <machine/fdt.h>
-#include <machine/intr.h>
+//#include <machine/intr.h>
 
-#include <dev/fdt/fdt_common.h>
-#include <dev/ofw/ofw_bus.h>
-#include <dev/ofw/ofw_bus_subr.h>
+//#include <dev/fdt/fdt_common.h>
+//#include <dev/ofw/ofw_bus.h>
+//#include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/uart/uart.h>
 #include <dev/uart/uart_cpu.h>
@@ -245,6 +245,9 @@ apq8064_putc(struct uart_bas *bas, int c)
 {
 	int limit;
 
+	if (c == '\n')
+		apq8064_putc(bas, '\r');
+	
 	limit = 250000;
 
 	/* 
@@ -293,6 +296,13 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 
 	return (c & 0xff);
 }
+
+/*
+ * High-level UART interface.
+ */
+struct apq8064_uart_softc {
+        struct uart_softc base;
+};
 
 static int apq8064_bus_probe(struct uart_softc *sc);
 static int apq8064_bus_attach(struct uart_softc *sc);
@@ -435,7 +445,7 @@ apq8064_bus_ipend(struct uart_softc *sc)
 			ipend |= SER_INT_TXIDLE;
 
 		// TX is in TX_READY
-		imr |= (1 << 7);
+//		imr |= (1 << 7);
 	}
 	// enable back
 	SETREG(bas, UART_DM_IMR, imr);
@@ -466,9 +476,9 @@ apq8064_bus_ioctl(struct uart_softc *sc, int request, intptr_t data)
 }
 
 struct uart_class uart_apq8064_class = {
-	"apq8064 class",
+	"apq8064",
 	apq8064_methods,
-	1,
+	sizeof(struct apq8064_softc),
 	.uc_ops = &uart_apq8064_ops,
 	.uc_range = 8,
 	.uc_rclk = DEF_CLK,
