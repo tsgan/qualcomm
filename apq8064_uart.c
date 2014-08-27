@@ -478,7 +478,7 @@ apq8064_bus_ioctl(struct uart_softc *sc, int request, intptr_t data)
 struct uart_class uart_apq8064_class = {
 	"apq8064",
 	apq8064_methods,
-	sizeof(struct apq8064_softc),
+	sizeof(struct apq8064_uart_softc),
 	.uc_ops = &uart_apq8064_ops,
 	.uc_range = 8,
 	.uc_rclk = DEF_CLK,
