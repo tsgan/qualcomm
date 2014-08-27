@@ -44,7 +44,7 @@
 	aliases {
 		soc = &SOC;
 		UART0 = &UART0;
-	}
+	};
 
 	SOC: apq8064 {
 		#address-cells = <1>;
@@ -122,7 +122,7 @@
 			current-speed = <115200>;
 			clock-frequency = < 27000000 >;
 		};
-	}
+	};
 	chosen {
 		bootargs = "-v";
 		stdin = "UART0";
