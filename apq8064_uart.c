@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2003 Marcel Moolenaar
- * Copyright (c) 2007-2009 Andrew Turner
- * Copyright (c) 2013 Ruslan Bukin <br@bsdpad.com>
  * Copyright (c) 2014 Ganbold Tsagaankhuu <ganbold@freebsd.org>
  * All rights reserved.
  *
@@ -36,17 +33,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/bus.h>
 #include <sys/conf.h>
-//#include <sys/cons.h>
 #include <sys/kdb.h>
-//#include <sys/tty.h>
-//#include <sys/rman.h>
 #include <machine/bus.h>
 #include <machine/fdt.h>
-//#include <machine/intr.h>
-
-//#include <dev/fdt/fdt_common.h>
-//#include <dev/ofw/ofw_bus.h>
-//#include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/uart/uart.h>
 #include <dev/uart/uart_cpu.h>
@@ -56,7 +45,7 @@ __FBSDID("$FreeBSD$");
 
 #include "uart_if.h"
 
-#define	DEF_CLK		1843200
+#define	DEF_CLK		7372800
 
 #define GETREG(bas, reg)                                                \
                 bus_space_read_4((bas)->bst, (bas)->bsh, (reg))
@@ -121,18 +110,14 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 	}
 
 	switch (stopbits) {
-	case 0:
-		ulcon |= (UART_DM_SBL_9_16 << 2);
-		break;
 	case 1:
 		ulcon |= (UART_DM_SBL_1 << 2);
 		break;
 	case 2:
-		ulcon |= (UART_DM_SBL_1_9_16 << 2);
-		break;
-	case 3:
 		ulcon |= (UART_DM_SBL_2 << 2);
 		break;
+	default:
+		return (EINVAL);
 	}
 
 //	uart_setreg(bas, UART_DM_MR2, ulcon);
@@ -142,6 +127,14 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 
 	/* Set 115200 for both TX and RX. */;
 	uart_setreg(bas, UART_DM_CSR, 0xff);
+
+//	uart_setreg(bas, UART_DM_CSR, UART_DM_CSR_28800);
+
+	uint32_t data;
+	data = 31 & UART_DM_IPR_STALE_LSB_BMSK;
+	data |= UART_DM_IPR_STALE_TIMEOUT_MSB_BMSK & (31 << 2);
+
+	uart_setreg(bas, UART_DM_IPR, data);
 
 	return (0);
 }
@@ -166,6 +159,7 @@ static void
 apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
     int parity)
 {
+	uint32_t data;
 
 	if (bas->rclk == 0)
 		bas->rclk = DEF_CLK;
@@ -176,10 +170,10 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	/* Hardware flow control isn't supported */
 	uart_setreg(bas, UART_DM_MR1, 0x0);
 
+	/* Set parameters */
 	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
 
-	/* Configure Interrupt Mask register IMR */
-	uart_setreg(bas, UART_DM_IMR, UART_DM_IMR_ENABLED);
+	uart_setreg(bas, UART_DM_IMR, 0);
 
 	/* Configure Tx and Rx watermarks configuration registers */
 	/*
@@ -193,7 +187,14 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 
 	/* Configure Interrupt Programming Register */
 	/* Set initial Stale timeout value */
-	uart_setreg(bas, UART_DM_IPR, UART_DM_STALE_TIMEOUT_LSB);
+//	uart_setreg(bas, UART_DM_IPR, UART_DM_STALE_TIMEOUT_LSB);
+
+	/* Make sure RXSTALE count is non-zero */
+	data = GETREG(bas, UART_DM_IPR);
+	if (!data) {
+		data |= 0x1f & UART_DM_IPR_STALE_LSB_BMSK;
+		SETREG(bas, UART_DM_IPR, data);
+	}
 
 	/* Configure IRDA if required */
 	/* Disabling IRDA mode */
@@ -204,20 +205,25 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	/* Keep it in reset state */
 	uart_setreg(bas, UART_DM_HCR, 0x0);
 
-	/* Configure Rx FIFO base address */
-	/*
-	 * Both TX/RX shares same SRAM and default is half-n-half.
-	 * Sticking with default value now.
-	 * As such RAM size is (2^RAM_ADDR_WIDTH, 32-bit entries).
-	 * We have found RAM_ADDR_WIDTH = 0x7f 
-	 */
+	/* Issue soft reset command */
+	SETREG(bas, UART_DM_CR, RESET_TX);
+	SETREG(bas, UART_DM_CR, RESET_RX);
+	SETREG(bas, UART_DM_CR, RESET_ERROR_STATUS);
+	SETREG(bas, UART_DM_CR, RESET_BREAK_INT);
+	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+
+	SETREG(bas, UART_DM_CR, RESET_CTS);
+//	SETREG(bas, UART_DM_CR, RFR_LOW);
 
 	/* Issue soft reset command */
-	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_RX);
-	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_TX);
-	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
-	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_TX_ERR);
-	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
+//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_RX);
+//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_TX);
+//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
+//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_TX_ERR);
+//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
+
+	/* Configure Interrupt Mask register IMR */
+	uart_setreg(bas, UART_DM_IMR, UART_DM_IMR_ENABLED);
 
 	/* Enable/Disable Rx/Tx DM interfaces */
 	/* Data Mover not currently utilized. */
@@ -272,7 +278,7 @@ apq8064_putc(struct uart_bas *bas, int c)
                 DELAY(4);
 
         /* TX FIFO has space. Write the chars */
-        uart_setreg(bas, UART_DM_TF(0), c);
+        SETREG(bas, UART_DM_TF(0), c);
 }
 
 static int
@@ -356,6 +362,7 @@ static int
 apq8064_bus_transmit(struct uart_softc *sc)
 {
 	struct uart_bas *bas = &sc->sc_bas;
+	uint32_t imr;
 	int i;
 
 	uart_lock(sc->sc_hwmtx);
@@ -369,8 +376,10 @@ apq8064_bus_transmit(struct uart_softc *sc)
 
 	uart_unlock(sc->sc_hwmtx);
 
-	/* Clear TX_READY interrupt */
-	SETREG(bas, UART_DM_CR, UART_DM_GCMD_RES_TX_RDY_INT);
+	/* Disable TX_READY interrupt */
+	imr = GETREG(bas, UART_DM_IMR);
+	imr &= ~UART_DM_TX_READY;
+	SETREG(bas, UART_DM_IMR, imr);
 
 	return (0);
 }
@@ -386,10 +395,20 @@ static int
 apq8064_bus_receive(struct uart_softc *sc)
 {
 	struct uart_bas *bas;
+	uint32_t imr;
 	int c;
 
 	bas = &sc->sc_bas;
-        while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {
+
+	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+	SETREG(bas, UART_DM_DMRX, 512);
+	SETREG(bas, UART_DM_CR, STALE_EVENT_ENABLE);
+
+	imr = GETREG(bas, UART_DM_IMR);
+	imr |= UART_DM_RXLEV;
+	SETREG(bas, UART_DM_IMR, imr);
+
+	while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {	
                	if (uart_rx_full(sc)) {
 	                /* No space left in input buffer */
                         sc->sc_rxbuf[sc->sc_rxput] = UART_STAT_OVERRUN;
@@ -426,29 +445,45 @@ static int
 apq8064_bus_ipend(struct uart_softc *sc)
 {
 	struct uart_bas *bas = &sc->sc_bas;
-	uint32_t ints, imr;
+	uint32_t isr, imr;
 	int ipend;
 
 	uart_lock(sc->sc_hwmtx);
-	ints = GETREG(bas, UART_DM_MISR);
+	isr = GETREG(bas, UART_DM_MISR);
+
 	imr = GETREG(bas, UART_DM_IMR);
 
-	// disable interrupt
-	SETREG(bas, UART_DM_IMR, 0);
-
 	ipend = 0;
-	if (ints & (UART_DM_RXLEV | UART_DM_RXSTALE)) {
+
+	/* Uart RX starting */
+	if (isr & UART_DM_RXLEV) {
 		ipend |= SER_INT_RXREADY;
+		imr &= ~UART_DM_RXLEV;
+		SETREG(bas, UART_DM_IMR, imr);
 	}
-	if (ints & UART_DM_TXLEV) {
+
+	/* Stale rx interrupt */
+	if (isr & UART_DM_RXSTALE) {
+		ipend |= SER_INT_RXREADY;
+		SETREG(bas, UART_DM_CR, STALE_EVENT_DISABLE);
+		SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+	}
+
+	/* tx ready interrupt */
+	if (isr & UART_DM_TX_READY) {
 		if (sc->sc_txbusy != 0)
 			ipend |= SER_INT_TXIDLE;
-
-		// TX is in TX_READY
-//		imr |= (1 << 7);
+		/* Clear  TX Ready */
+		SETREG(bas, UART_DM_CR, CLEAR_TX_READY);
 	}
-	// enable back
-	SETREG(bas, UART_DM_IMR, imr);
+
+	if (isr & UART_DM_TXLEV) {
+		/* TX FIFO is empty */
+		if (sc->sc_txbusy != 0)
+			ipend |= SER_INT_TXIDLE;
+		imr &= ~UART_DM_TXLEV;
+		SETREG(bas, UART_DM_IMR, imr);
+	}
 
 	uart_unlock(sc->sc_hwmtx);
 	return (ipend);

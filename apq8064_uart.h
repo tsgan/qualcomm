@@ -61,20 +61,38 @@ enum UART_DM_BITS_PER_CHAR {
 
 /* UART_DM Registers */
 
-/* UART Operational Mode Register */
+/* UART Operational Mode Registers (HSUART) */
 #define	UART_DM_MR1			(0x00)
 #define	UART_DM_MR2			(0x04)
+
 #define	UART_DM_RXBRK_ZERO_CHAR_OFF	(1 << 8)
 #define	UART_DM_LOOPBACK		(1 << 7)
 
-/* UART Clock Selection Register */
+/* UART Clock Selection Register, write only */
 #define	UART_DM_CSR			(0x08)
+#define UART_DM_CSR_115200 		0xFF
+#define UART_DM_CSR_57600  		0xEE
+#define UART_DM_CSR_38400  		0xDD
+#define UART_DM_CSR_28800  		0xCC
+#define UART_DM_CSR_19200  		0xBB
+#define UART_DM_CSR_14400  		0xAA
+#define UART_DM_CSR_9600   		0x99
+#define UART_DM_CSR_7200   		0x88
+#define UART_DM_CSR_4800   		0x77
+#define UART_DM_CSR_3600   		0x66
+#define UART_DM_CSR_2400   		0x55
+#define UART_DM_CSR_1200   		0x44
+#define UART_DM_CSR_600    		0x33
+#define UART_DM_CSR_300    		0x22
+#define UART_DM_CSR_150    		0x11
+#define UART_DM_CSR_75     		0x00
 
-/* UART DM TX FIFO Registers - 4 */
+/* UART DM TX FIFO Registers - 4, write only */
 #define	UART_DM_TF(x)			(0x70 + (4 * (x)))
 
-/* UART Command Register */
+/* UART Command Register, write only */
 #define	UART_DM_CR			(0x10)
+
 #define	 UART_DM_CR_RX_ENABLE		(1 << 0)
 #define	 UART_DM_CR_RX_DISABLE		(1 << 1)
 #define	 UART_DM_CR_TX_ENABLE		(1 << 2)
@@ -85,6 +103,7 @@ enum UART_DM_BITS_PER_CHAR {
 #define	UART_DM_CR_CH_CMD_MSB(x)	((x >> 4 ) << 11 )
 #define	UART_DM_CR_CH_CMD(x)		(UART_DM_CR_CH_CMD_LSB(x) | \
 					    UART_DM_CR_CH_CMD_MSB(x))
+
 
 #define	UART_DM_CMD_NULL		UART_DM_CR_CH_CMD(0)
 #define	UART_DM_CMD_RESET_RX		UART_DM_CR_CH_CMD(1)
@@ -105,6 +124,44 @@ enum UART_DM_BITS_PER_CHAR {
 #define	UART_DM_CMD_RES_BRKEND_INT	UART_DM_CR_CH_CMD(13)
 #define	UART_DM_CMD_RES_PER_FRM_INT	UART_DM_CR_CH_CMD(14)
 
+
+
+/* UART_DM_CR channel command bit value (register field is bits 8:4) */
+#define RESET_RX                	0x10
+#define RESET_TX                	0x20
+#define RESET_ERROR_STATUS      	0x30
+#define RESET_BREAK_INT         	0x40
+#define START_BREAK             	0x50
+#define STOP_BREAK              	0x60
+#define RESET_CTS               	0x70
+#define RESET_STALE_INT         	0x80
+#define RFR_LOW                 	0xD0
+#define RFR_HIGH                	0xE0
+#define CR_PROTECTION_EN        	0x100
+#define STALE_EVENT_ENABLE      	0x500
+#define STALE_EVENT_DISABLE     	0x600
+#define FORCE_STALE_EVENT       	0x400
+#define CLEAR_TX_READY          	0x300
+#define RESET_TX_ERROR          	0x800
+#define RESET_TX_DONE           	0x810
+
+#define UART_DM_MR1_AUTO_RFR_LEVEL1_BMSK 	0xffffff00
+#define UART_DM_MR1_AUTO_RFR_LEVEL0_BMSK 	0x3f
+#define UART_DM_MR1_CTS_CTL_BMSK 		0x40
+#define UART_DM_MR1_RX_RDY_CTL_BMSK 		0x80
+
+#define UART_DM_MR2_ERROR_MODE_BMSK 		0x40
+#define UART_DM_MR2_BITS_PER_CHAR_BMSK 		0x30
+
+
+#define UART_DM_MR2_STOP_BIT_LEN_BMSK 		0xc
+
+#define UART_DM_MR2_PARITY_MODE_BMSK 		0x3
+
+#define UART_DM_IPR_STALE_TIMEOUT_MSB_BMSK 	0xffffff80
+#define UART_DM_IPR_STALE_LSB_BMSK 		0x1f
+
+
 /*UART General Command */
 #define	UART_DM_GCMD_NULL		(0 << 8)
 #define	UART_DM_GCMD_CR_PROT_EN		(1 << 8)
@@ -116,7 +173,7 @@ enum UART_DM_BITS_PER_CHAR {
 
 /* UART Interrupt Mask Register */
 #define	UART_DM_IMR			(0x14)
-
+/* these can be used for both ISR and IMR registers */
 #define	UART_DM_TXLEV			(1 << 0)
 #define	UART_DM_RXHUNT			(1 << 1)
 #define	UART_DM_RXBRK_CHNG		(1 << 2)
@@ -175,6 +232,7 @@ enum UART_DM_BITS_PER_CHAR {
 
 /* UART Status Register */
 #define	UART_DM_SR			(0x08)
+/* register field mask mapping */
 #define	 UART_DM_SR_RXRDY		(1 << 0)
 #define	 UART_DM_SR_RXFULL		(1 << 1)
 #define	 UART_DM_SR_TXRDY		(1 << 2)
@@ -210,5 +268,7 @@ enum UART_DM_BITS_PER_CHAR {
 #define	 UART_DM_RXFS_STATE_MSB(x)	UART_DM_EXTR_BITS(x,14,31)
 #define	 UART_DM_RXFS_BUF_STATE(x)	UART_DM_EXTR_BITS(x,7,9)
 #define	 UART_DM_RXFS_ASYNC_STATE(x)	UART_DM_EXTR_BITS(x,10,13)
+
+#define	UART_DM_SIM_CFG_ADDR		0x80
 
 #endif	/* _UART_DM_H_ */
