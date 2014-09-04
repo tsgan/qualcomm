@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2014 Ganbold Tsagaankhuu <ganbold@freebsd.org>
  * All rights reserved.
  *
