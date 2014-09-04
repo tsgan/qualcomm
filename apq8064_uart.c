@@ -166,12 +166,12 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 
 	KASSERT(bas->rclk != 0, ("apq8064_init: Invalid rclk"));
 
+	/* Set parameters */
+	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
+
 	/* Configure UART mode registers MR1 and MR2 */
 	/* Hardware flow control isn't supported */
 	uart_setreg(bas, UART_DM_MR1, 0x0);
-
-	/* Set parameters */
-	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
 
 	uart_setreg(bas, UART_DM_IMR, 0);
 
@@ -234,10 +234,10 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	uart_setreg(bas, UART_DM_CR, UART_DM_CR_TX_ENABLE);
 
 	/* Initialize Receive Path */
-	SETREG(bas, UART_DM_CR, UART_DM_GCMD_DIS_STALE_EVT);
-	SETREG(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
-	SETREG(bas, UART_DM_DMRX, UART_DM_DMRX_DEF_VALUE);
-	SETREG(bas, UART_DM_CR, UART_DM_GCMD_ENA_STALE_EVT);
+//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_DIS_STALE_EVT);
+//	SETREG(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
+//	SETREG(bas, UART_DM_DMRX, UART_DM_DMRX_DEF_VALUE);
+//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_ENA_STALE_EVT);
 }
 
 static void
@@ -254,7 +254,7 @@ apq8064_putc(struct uart_bas *bas, int c)
 	if (c == '\n')
 		apq8064_putc(bas, '\r');
 	
-	limit = 250000;
+	limit = 25000;
 
 	/* 
 	 * Write to NO_CHARS_FOR_TX register number of characters
@@ -272,7 +272,7 @@ apq8064_putc(struct uart_bas *bas, int c)
         /* Write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
-	limit = 250000;
+	limit = 25000;
         /* Wait till TX FIFO has space */
         while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0 && --limit)
                 DELAY(4);
@@ -400,6 +400,7 @@ apq8064_bus_receive(struct uart_softc *sc)
 
 	bas = &sc->sc_bas;
 
+	/* Initialize Receive Path */
 	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
 	SETREG(bas, UART_DM_DMRX, 512);
 	SETREG(bas, UART_DM_CR, STALE_EVENT_ENABLE);
