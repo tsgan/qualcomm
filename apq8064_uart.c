@@ -70,6 +70,7 @@ static int
 apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
     int stopbits, int parity)
 {
+	uint32_t data;
 	int ulcon;
 
 	ulcon = 0;
@@ -119,22 +120,20 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 	default:
 		return (EINVAL);
 	}
-
-//	uart_setreg(bas, UART_DM_MR2, ulcon);
-
-	/* For now always set 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
+#if 0
+	uart_setreg(bas, UART_DM_MR2, ulcon);
+#endif
+	/* For now set 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
 	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
 
 	/* Set 115200 for both TX and RX. */;
 	uart_setreg(bas, UART_DM_CSR, 0xff);
 
-//	uart_setreg(bas, UART_DM_CSR, UART_DM_CSR_28800);
-
-	uint32_t data;
 	data = 31 & UART_DM_IPR_STALE_LSB_BMSK;
 	data |= UART_DM_IPR_STALE_TIMEOUT_MSB_BMSK & (31 << 2);
 
 	uart_setreg(bas, UART_DM_IPR, data);
+	uart_barrier(bas);
 
 	return (0);
 }
@@ -159,20 +158,20 @@ static void
 apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
     int parity)
 {
-	uint32_t data;
 
 	if (bas->rclk == 0)
 		bas->rclk = DEF_CLK;
 
 	KASSERT(bas->rclk != 0, ("apq8064_init: Invalid rclk"));
 
-	/* Set parameters */
+	/* Set default parameters */
 	apq8064_uart_param(bas, baudrate, databits, stopbits, parity);
 
 	/* Configure UART mode registers MR1 and MR2 */
 	/* Hardware flow control isn't supported */
 	uart_setreg(bas, UART_DM_MR1, 0x0);
 
+	/* Reset interrupt mask register. */
 	uart_setreg(bas, UART_DM_IMR, 0);
 
 	/* Configure Tx and Rx watermarks configuration registers */
@@ -182,22 +181,14 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	 */
 	uart_setreg(bas, UART_DM_TFWR, UART_DM_TFW_VALUE);
 
-	/* RX watermark value */
+	/* Set RX watermark value */
 	uart_setreg(bas, UART_DM_RFWR, UART_DM_RFW_VALUE);
 
 	/* Configure Interrupt Programming Register */
 	/* Set initial Stale timeout value */
-//	uart_setreg(bas, UART_DM_IPR, UART_DM_STALE_TIMEOUT_LSB);
+	uart_setreg(bas, UART_DM_IPR, UART_DM_STALE_TIMEOUT_LSB);
 
-	/* Make sure RXSTALE count is non-zero */
-	data = GETREG(bas, UART_DM_IPR);
-	if (!data) {
-		data |= 0x1f & UART_DM_IPR_STALE_LSB_BMSK;
-		SETREG(bas, UART_DM_IPR, data);
-	}
-
-	/* Configure IRDA if required */
-	/* Disabling IRDA mode */
+	/* Disable IRDA mode */
 	uart_setreg(bas, UART_DM_IRDA, 0x0);
 
 	/* Configure and enable sim interface if required */
@@ -212,32 +203,15 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	SETREG(bas, UART_DM_CR, RESET_BREAK_INT);
 	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
 
-	SETREG(bas, UART_DM_CR, RESET_CTS);
-//	SETREG(bas, UART_DM_CR, RFR_LOW);
-
-	/* Issue soft reset command */
-//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_RX);
-//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_TX);
-//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
-//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_TX_ERR);
-//	uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
-
-	/* Configure Interrupt Mask register IMR */
-	uart_setreg(bas, UART_DM_IMR, UART_DM_IMR_ENABLED);
-
 	/* Enable/Disable Rx/Tx DM interfaces */
-	/* Data Mover not currently utilized. */
+	/* Disable Data Mover for now. */
 	uart_setreg(bas, UART_DM_DMEN, 0x0);
 
 	/* Enable transmitter and receiver */
 	uart_setreg(bas, UART_DM_CR, UART_DM_CR_RX_ENABLE);
 	uart_setreg(bas, UART_DM_CR, UART_DM_CR_TX_ENABLE);
 
-	/* Initialize Receive Path */
-//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_DIS_STALE_EVT);
-//	SETREG(bas, UART_DM_CR, UART_DM_CMD_RES_STALE_INT);
-//	SETREG(bas, UART_DM_DMRX, UART_DM_DMRX_DEF_VALUE);
-//	SETREG(bas, UART_DM_CR, UART_DM_GCMD_ENA_STALE_EVT);
+	uart_barrier(bas);
 }
 
 static void
@@ -257,19 +231,20 @@ apq8064_putc(struct uart_bas *bas, int c)
 	limit = 25000;
 
 	/* 
-	 * Write to NO_CHARS_FOR_TX register number of characters
+	 * Write to NO_CHARS_FOR_TX register the number of characters
 	 * to be transmitted. However, before writing TX_FIFO must
 	 * be empty as indicated by TX_READY interrupt in IMR register
 	 */
 
-        /* Check if transmit FIFO is empty.
-         * If not we'll wait for TX_READY interrupt. */
+        /* 
+	 * Check if transmit FIFO is empty.
+         * If not wait for TX_READY interrupt.
+	 */
         if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
                 while ((uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY) == 0 && --limit)
                         DELAY(4);
         }
-        /* We are here. FIFO is ready to be written. */
-        /* Write number of characters to be written */
+        /* FIFO is ready, write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
 	limit = 25000;
@@ -277,7 +252,7 @@ apq8064_putc(struct uart_bas *bas, int c)
         while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0 && --limit)
                 DELAY(4);
 
-        /* TX FIFO has space. Write the chars */
+        /* TX FIFO has space. Write char */
         SETREG(bas, UART_DM_TF(0), c);
 }
 
@@ -285,6 +260,7 @@ static int
 apq8064_rxready(struct uart_bas *bas)
 {
 
+	/* Wait for a character to come ready */
 	return ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) ==
 	    UART_DM_SR_RXRDY);
 }
@@ -294,10 +270,15 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 {
 	int c;
 
-        /* Check for Overrun error. We'll just reset Error Status */
+	/* Wait for a character to come ready */
+	while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) != UART_DM_SR_RXRDY)
+		DELAY(4);
+
+        /* Check for Overrun error. If so reset Error Status */
         if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
                 uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
 
+	/* Read char */
 	c = uart_getreg(bas, UART_DM_RF(0));
 
 	return (c);
@@ -308,6 +289,7 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
  */
 struct apq8064_uart_softc {
         struct uart_softc base;
+	uint32_t ier;
 };
 
 static int apq8064_bus_probe(struct uart_softc *sc);
@@ -332,7 +314,6 @@ static kobj_method_t apq8064_methods[] = {
 	KOBJMETHOD(uart_receive,	apq8064_bus_receive),
 	KOBJMETHOD(uart_setsig,		apq8064_bus_setsig),
 	KOBJMETHOD(uart_transmit,	apq8064_bus_transmit),
-
 	{0, 0 }
 };
 
@@ -343,7 +324,7 @@ apq8064_bus_probe(struct uart_softc *sc)
 	sc->sc_txfifosz = 64;
 	sc->sc_rxfifosz = 64;
 
-        device_set_desc(sc->sc_dev, "Qualcomm UART");
+        device_set_desc(sc->sc_dev, "Qualcomm HSUART");
 
 	return (0);
 }
@@ -351,35 +332,51 @@ apq8064_bus_probe(struct uart_softc *sc)
 static int
 apq8064_bus_attach(struct uart_softc *sc)
 {
+	struct apq8064_uart_softc *u = (struct apq8064_uart_softc *)sc;
+	struct uart_bas *bas = &sc->sc_bas;
 
 	sc->sc_hwiflow = 0;
 	sc->sc_hwoflow = 0;
 
+	/* Set TX_READY, TXLEV, RXLEV, RXSTALE */
+	u->ier = UART_DM_IMR_ENABLED;
+
+	/* Configure Interrupt Mask register IMR */
+	uart_setreg(bas, UART_DM_IMR, u->ier);
+
 	return (0);
 }
 
+/* 
+ * Write the current transmit buffer to the TX FIFO. 
+ */
 static int
 apq8064_bus_transmit(struct uart_softc *sc)
 {
+	struct apq8064_uart_softc *u = (struct apq8064_uart_softc *)sc;
 	struct uart_bas *bas = &sc->sc_bas;
-	uint32_t imr;
 	int i;
 
 	uart_lock(sc->sc_hwmtx);
 
+	/* Write some data */
 	for (i = 0; i < sc->sc_txdatasz; i++) {
+		/* Write TX data */
 		apq8064_putc(bas, sc->sc_txbuf[i]);
-		uart_barrier(&sc->sc_bas);
+		uart_barrier(bas);
 	}
 
+	/* TX FIFO is empty now, enable TX_READY interrupt */
+	u->ier |= UART_DM_TX_READY;
+	SETREG(bas, UART_DM_IMR, u->ier);
+	uart_barrier(bas);
+
+	/* 
+	 * Inform upper layer that it us transmitting data to hardware,
+	 * this will be cleared when TXIDLE interrupt occurs.
+	 */
 	sc->sc_txbusy = 1;
-
 	uart_unlock(sc->sc_hwmtx);
-
-	/* Disable TX_READY interrupt */
-	imr = GETREG(bas, UART_DM_IMR);
-	imr &= ~UART_DM_TX_READY;
-	SETREG(bas, UART_DM_IMR, imr);
 
 	return (0);
 }
@@ -399,6 +396,7 @@ apq8064_bus_receive(struct uart_softc *sc)
 	int c;
 
 	bas = &sc->sc_bas;
+	uart_lock(sc->sc_hwmtx);
 
 	/* Initialize Receive Path */
 	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
@@ -409,6 +407,7 @@ apq8064_bus_receive(struct uart_softc *sc)
 	imr |= UART_DM_RXLEV;
 	SETREG(bas, UART_DM_IMR, imr);
 
+	/* Loop over until we are full, or no data is available */
 	while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {	
                	if (uart_rx_full(sc)) {
 	                /* No space left in input buffer */
@@ -416,9 +415,14 @@ apq8064_bus_receive(struct uart_softc *sc)
                         break;
                 }
 
+		/* Read RX FIFO */
 		c = uart_getreg(bas, UART_DM_RF(0));
+		uart_barrier(bas);
+
                 uart_rx_put(sc, c);
 	}
+
+	uart_unlock(sc->sc_hwmtx);
 
 	return (0);
 }
@@ -445,45 +449,57 @@ apq8064_bus_param(struct uart_softc *sc, int baudrate, int databits,
 static int
 apq8064_bus_ipend(struct uart_softc *sc)
 {
+	struct apq8064_uart_softc *u = (struct apq8064_uart_softc *)sc;
 	struct uart_bas *bas = &sc->sc_bas;
-	uint32_t isr, imr;
+	uint32_t isr;
 	int ipend;
 
 	uart_lock(sc->sc_hwmtx);
-	isr = GETREG(bas, UART_DM_MISR);
 
-	imr = GETREG(bas, UART_DM_IMR);
+	/* Get ISR status */
+	isr = GETREG(bas, UART_DM_MISR);
 
 	ipend = 0;
 
-	/* Uart RX starting */
+	/* Uart RX starting, notify upper layer */
 	if (isr & UART_DM_RXLEV) {
+		u->ier &= ~UART_DM_RXLEV;
+		SETREG(bas, UART_DM_IMR, u->ier);
+		uart_barrier(bas);
 		ipend |= SER_INT_RXREADY;
-		imr &= ~UART_DM_RXLEV;
-		SETREG(bas, UART_DM_IMR, imr);
 	}
 
-	/* Stale rx interrupt */
+	/* Stale RX interrupt */
 	if (isr & UART_DM_RXSTALE) {
-		ipend |= SER_INT_RXREADY;
+		/* Disable and reset it */
 		SETREG(bas, UART_DM_CR, STALE_EVENT_DISABLE);
 		SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+		uart_barrier(bas);
+		ipend |= SER_INT_RXREADY;
 	}
 
-	/* tx ready interrupt */
+	/* TX READY interrupt */
 	if (isr & UART_DM_TX_READY) {
-		if (sc->sc_txbusy != 0)
-			ipend |= SER_INT_TXIDLE;
 		/* Clear  TX Ready */
 		SETREG(bas, UART_DM_CR, CLEAR_TX_READY);
+
+		/* Disable TX_READY */
+		u->ier &= ~UART_DM_TX_READY;
+		SETREG(bas, UART_DM_IMR, u->ier);
+		uart_barrier(bas);
+
+		if (sc->sc_txbusy != 0)
+			ipend |= SER_INT_TXIDLE;
 	}
 
 	if (isr & UART_DM_TXLEV) {
 		/* TX FIFO is empty */
+		u->ier &= ~UART_DM_TXLEV;
+		SETREG(bas, UART_DM_IMR, u->ier);
+		uart_barrier(bas);
+
 		if (sc->sc_txbusy != 0)
 			ipend |= SER_INT_TXIDLE;
-		imr &= ~UART_DM_TXLEV;
-		SETREG(bas, UART_DM_IMR, imr);
 	}
 
 	uart_unlock(sc->sc_hwmtx);
