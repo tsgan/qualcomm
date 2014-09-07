@@ -361,7 +361,7 @@ apq8064_bus_transmit(struct uart_softc *sc)
 	uart_barrier(bas);
 
 	/* 
-	 * Inform upper layer that it us transmitting data to hardware,
+	 * Inform upper layer that it is transmitting data to hardware,
 	 * this will be cleared when TXIDLE interrupt occurs.
 	 */
 	sc->sc_txbusy = 1;
