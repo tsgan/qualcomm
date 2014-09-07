@@ -225,11 +225,6 @@ apq8064_putc(struct uart_bas *bas, int c)
 {
 	int limit;
 
-	if (c == '\n')
-		apq8064_putc(bas, '\r');
-	
-	limit = 25000;
-
 	/* 
 	 * Write to NO_CHARS_FOR_TX register the number of characters
 	 * to be transmitted. However, before writing TX_FIFO must
@@ -240,6 +235,7 @@ apq8064_putc(struct uart_bas *bas, int c)
 	 * Check if transmit FIFO is empty.
          * If not wait for TX_READY interrupt.
 	 */
+	limit = 1000;
         if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
                 while ((uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY) == 0 && --limit)
                         DELAY(4);
@@ -247,13 +243,12 @@ apq8064_putc(struct uart_bas *bas, int c)
         /* FIFO is ready, write number of characters to be written */
         uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
-	limit = 25000;
         /* Wait till TX FIFO has space */
-        while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0 && --limit)
+        while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0)
                 DELAY(4);
 
         /* TX FIFO has space. Write char */
-        SETREG(bas, UART_DM_TF(0), c);
+        SETREG(bas, UART_DM_TF(0), (c & 0xff));
 }
 
 static int
