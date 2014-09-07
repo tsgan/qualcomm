@@ -391,21 +391,19 @@ apq8064_bus_setsig(struct uart_softc *sc, int sig)
 static int
 apq8064_bus_receive(struct uart_softc *sc)
 {
+	struct apq8064_uart_softc *u = (struct apq8064_uart_softc *)sc;
 	struct uart_bas *bas;
-	uint32_t imr;
 	int c;
 
 	bas = &sc->sc_bas;
 	uart_lock(sc->sc_hwmtx);
 
-	/* Initialize Receive Path */
+	/* Initialize Receive Path and interrupt */
 	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
 	SETREG(bas, UART_DM_DMRX, 512);
 	SETREG(bas, UART_DM_CR, STALE_EVENT_ENABLE);
-
-	imr = GETREG(bas, UART_DM_IMR);
-	imr |= UART_DM_RXLEV;
-	SETREG(bas, UART_DM_IMR, imr);
+	u->ier |= UART_DM_RXLEV;
+	SETREG(bas, UART_DM_IMR, u->ier);
 
 	/* Loop over until we are full, or no data is available */
 	while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {	
