@@ -291,6 +291,8 @@ static int apq8064_bus_param(struct uart_softc *, int, int, int, int);
 static int apq8064_bus_receive(struct uart_softc *);
 static int apq8064_bus_setsig(struct uart_softc *, int);
 static int apq8064_bus_transmit(struct uart_softc *);
+static void apq8064_bus_grab(struct uart_softc *);
+static void apq8064_bus_ungrab(struct uart_softc *);
 
 static kobj_method_t apq8064_methods[] = {
 	KOBJMETHOD(uart_probe,		apq8064_bus_probe),
@@ -303,6 +305,8 @@ static kobj_method_t apq8064_methods[] = {
 	KOBJMETHOD(uart_receive,	apq8064_bus_receive),
 	KOBJMETHOD(uart_setsig,		apq8064_bus_setsig),
 	KOBJMETHOD(uart_transmit,	apq8064_bus_transmit),
+	KOBJMETHOD(uart_grab,		apq8064_bus_grab),
+	KOBJMETHOD(uart_ungrab,		apq8064_bus_ungrab),
 	{0, 0 }
 };
 
@@ -512,6 +516,36 @@ apq8064_bus_ioctl(struct uart_softc *sc, int request, intptr_t data)
 {
 
 	return (EINVAL);
+}
+
+static void
+apq8064_bus_grab(struct uart_softc *sc)
+{
+	struct uart_bas *bas = &sc->sc_bas;
+
+	/*
+	 * turn off all interrupts to enter polling mode. Leave the
+	 * saved mask alone. We'll restore whatever it was in ungrab.
+	 */
+	uart_lock(sc->sc_hwmtx);
+	SETREG(bas, UART_DM_IMR, 0);
+	uart_barrier(bas);
+	uart_unlock(sc->sc_hwmtx);
+}
+
+static void
+apq8064_bus_ungrab(struct uart_softc *sc)
+{
+	struct apq8064_uart_softc *u = (struct apq8064_uart_softc *)sc;
+	struct uart_bas *bas = &sc->sc_bas;
+
+	/*
+	 * Restore previous interrupt mask
+	 */
+	uart_lock(sc->sc_hwmtx);
+	SETREG(bas, UART_DM_IMR, u->ier);
+	uart_barrier(bas);
+	uart_unlock(sc->sc_hwmtx);
 }
 
 struct uart_class uart_apq8064_class = {
