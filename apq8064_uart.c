@@ -70,7 +70,6 @@ static int
 apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
     int stopbits, int parity)
 {
-	uint32_t data;
 	int ulcon;
 
 	ulcon = 0;
@@ -128,11 +127,6 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 
 	/* Set 115200 for both TX and RX. */;
 	uart_setreg(bas, UART_DM_CSR, 0xff);
-
-	data = 31 & UART_DM_IPR_STALE_LSB_BMSK;
-	data |= UART_DM_IPR_STALE_TIMEOUT_MSB_BMSK & (31 << 2);
-
-	uart_setreg(bas, UART_DM_IPR, data);
 	uart_barrier(bas);
 
 	return (0);
