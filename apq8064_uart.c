@@ -191,11 +191,11 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 	uart_setreg(bas, UART_DM_HCR, 0x0);
 
 	/* Issue soft reset command */
-	SETREG(bas, UART_DM_CR, RESET_TX);
-	SETREG(bas, UART_DM_CR, RESET_RX);
-	SETREG(bas, UART_DM_CR, RESET_ERROR_STATUS);
-	SETREG(bas, UART_DM_CR, RESET_BREAK_INT);
-	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_TX);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_RX);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_ERROR_STATUS);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_BREAK_INT);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_STALE_INT);
 
 	/* Enable/Disable Rx/Tx DM interfaces */
 	/* Disable Data Mover for now. */
@@ -270,7 +270,7 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 
 	/* Check for Overrun error. If so reset Error Status */
 	if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
-		uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
+		uart_setreg(bas, UART_DM_CR, UART_DM_RESET_ERROR_STATUS);
 
 	/* Read char */
 	c = uart_getreg(bas, UART_DM_RF(0));
@@ -399,8 +399,8 @@ apq8064_bus_receive(struct uart_softc *sc)
 	uart_lock(sc->sc_hwmtx);
 
 	/* Initialize Receive Path and interrupt */
-	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
-	SETREG(bas, UART_DM_CR, STALE_EVENT_ENABLE);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_STALE_INT);
+	SETREG(bas, UART_DM_CR, UART_DM_STALE_EVENT_ENABLE);
 	u->ier |= UART_DM_RXLEV;
 	SETREG(bas, UART_DM_IMR, u->ier);
 
@@ -469,8 +469,8 @@ apq8064_bus_ipend(struct uart_softc *sc)
 	/* Stale RX interrupt */
 	if (isr & UART_DM_RXSTALE) {
 		/* Disable and reset it */
-		SETREG(bas, UART_DM_CR, STALE_EVENT_DISABLE);
-		SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+		SETREG(bas, UART_DM_CR, UART_DM_STALE_EVENT_DISABLE);
+		SETREG(bas, UART_DM_CR, UART_DM_RESET_STALE_INT);
 		uart_barrier(bas);
 		ipend |= SER_INT_RXREADY;
 	}
@@ -478,7 +478,7 @@ apq8064_bus_ipend(struct uart_softc *sc)
 	/* TX READY interrupt */
 	if (isr & UART_DM_TX_READY) {
 		/* Clear  TX Ready */
-		SETREG(bas, UART_DM_CR, CLEAR_TX_READY);
+		SETREG(bas, UART_DM_CR, UART_DM_CLEAR_TX_READY);
 
 		/* Disable TX_READY */
 		u->ier &= ~UART_DM_TX_READY;
@@ -534,7 +534,7 @@ apq8064_bus_grab(struct uart_softc *sc)
 	 * saved mask alone. We'll restore whatever it was in ungrab.
 	 */
 	uart_lock(sc->sc_hwmtx);
-	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
+	SETREG(bas, UART_DM_CR, UART_DM_RESET_STALE_INT);
 	SETREG(bas, UART_DM_IMR, 0);
 	uart_barrier(bas);
 	uart_unlock(sc->sc_hwmtx);
