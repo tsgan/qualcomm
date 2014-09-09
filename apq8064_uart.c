@@ -397,7 +397,6 @@ apq8064_bus_receive(struct uart_softc *sc)
 
 	/* Initialize Receive Path and interrupt */
 	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
-	SETREG(bas, UART_DM_DMRX, 512);
 	SETREG(bas, UART_DM_CR, STALE_EVENT_ENABLE);
 	u->ier |= UART_DM_RXLEV;
 	SETREG(bas, UART_DM_IMR, u->ier);
@@ -532,6 +531,7 @@ apq8064_bus_grab(struct uart_softc *sc)
 	 * saved mask alone. We'll restore whatever it was in ungrab.
 	 */
 	uart_lock(sc->sc_hwmtx);
+	SETREG(bas, UART_DM_CR, RESET_STALE_INT);
 	SETREG(bas, UART_DM_IMR, 0);
 	uart_barrier(bas);
 	uart_unlock(sc->sc_hwmtx);
