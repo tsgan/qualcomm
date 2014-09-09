@@ -79,12 +79,12 @@ enum UART_DM_BITS_PER_CHAR {
 
 /* UART Clock Selection Register, write only */
 #define	UART_DM_CSR				0x08
-#define	 UART_DM_CSR_115200			0xFF
-#define	 UART_DM_CSR_57600			0xEE
-#define	 UART_DM_CSR_38400			0xDD
-#define	 UART_DM_CSR_28800			0xCC
-#define	 UART_DM_CSR_19200			0xBB
-#define	 UART_DM_CSR_14400			0xAA
+#define	 UART_DM_CSR_115200			0xff
+#define	 UART_DM_CSR_57600			0xee
+#define	 UART_DM_CSR_38400			0xdd
+#define	 UART_DM_CSR_28800			0xcc
+#define	 UART_DM_CSR_19200			0xbb
+#define	 UART_DM_CSR_14400			0xaa
 #define	 UART_DM_CSR_9600			0x99
 #define	 UART_DM_CSR_7200			0x88
 #define	 UART_DM_CSR_4800			0x77

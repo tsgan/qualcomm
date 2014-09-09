@@ -126,7 +126,7 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
 
 	/* Set 115200 for both TX and RX. */;
-	uart_setreg(bas, UART_DM_CSR, 0xff);
+	uart_setreg(bas, UART_DM_CSR, UART_DM_CSR_115200);
 	uart_barrier(bas);
 
 	return (0);
@@ -529,8 +529,9 @@ apq8064_bus_grab(struct uart_softc *sc)
 {
 	struct uart_bas *bas = &sc->sc_bas;
 
+	/* XXX: fix needed */
 	/*
-	 * turn off all interrupts to enter polling mode. Leave the
+	 * Turn off all interrupts to enter polling mode. Leave the
 	 * saved mask alone. We'll restore whatever it was in ungrab.
 	 */
 	uart_lock(sc->sc_hwmtx);
