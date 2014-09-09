@@ -47,10 +47,10 @@ __FBSDID("$FreeBSD$");
 
 #define	DEF_CLK		7372800
 
-#define GETREG(bas, reg)                                                \
-                bus_space_read_4((bas)->bst, (bas)->bsh, (reg))
-#define SETREG(bas, reg, value)                                         \
-                bus_space_write_4((bas)->bst, (bas)->bsh, (reg), (value))
+#define	GETREG(bas, reg)	\
+    bus_space_read_4((bas)->bst, (bas)->bsh, (reg))
+#define SETREG(bas, reg, value)	\
+    bus_space_write_4((bas)->bst, (bas)->bsh, (reg), (value))
 
 static int apq8064_uart_param(struct uart_bas *, int, int, int, int);
 
@@ -122,7 +122,7 @@ apq8064_uart_param(struct uart_bas *bas, int baudrate, int databits,
 #if 0
 	uart_setreg(bas, UART_DM_MR2, ulcon);
 #endif
-	/* For now set 8-N-1 configuration: 8 data bits - No parity - 1 stop bit */
+	/* For now set 8-N-1 config: 8 data bits - No parity - 1 stop bit */
 	uart_setreg(bas, UART_DM_MR2, UART_DM_8_N_1_MODE);
 
 	/* Set 115200 for both TX and RX. */;
@@ -211,6 +211,7 @@ apq8064_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
 static void
 apq8064_term(struct uart_bas *bas)
 {
+
 	/* XXX */
 }
 
@@ -219,30 +220,31 @@ apq8064_putc(struct uart_bas *bas, int c)
 {
 	int limit;
 
-	/* 
+	/*
 	 * Write to NO_CHARS_FOR_TX register the number of characters
 	 * to be transmitted. However, before writing TX_FIFO must
 	 * be empty as indicated by TX_READY interrupt in IMR register
 	 */
 
-        /* 
+        /*
 	 * Check if transmit FIFO is empty.
-         * If not wait for TX_READY interrupt.
+	 * If not wait for TX_READY interrupt.
 	 */
 	limit = 1000;
-        if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
-                while ((uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY) == 0 && --limit)
-                        DELAY(4);
-        }
-        /* FIFO is ready, write number of characters to be written */
-        uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
+	if (!(uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXEMT)) {
+		while ((uart_getreg(bas, UART_DM_ISR) & UART_DM_TX_READY) == 0
+		    && --limit)
+			DELAY(4);
+	}
+	/* FIFO is ready, write number of characters to be written */
+	uart_setreg(bas, UART_DM_NO_CHARS_FOR_TX, 1);
 
-        /* Wait till TX FIFO has space */
-        while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0)
-                DELAY(4);
+	/* Wait till TX FIFO has space */
+	while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_TXRDY) == 0)
+		DELAY(4);
 
-        /* TX FIFO has space. Write char */
-        SETREG(bas, UART_DM_TF(0), (c & 0xff));
+	/* TX FIFO has space. Write char */
+	SETREG(bas, UART_DM_TF(0), (c & 0xff));
 }
 
 static int
@@ -262,12 +264,13 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 	uart_lock(mtx);
 
 	/* Wait for a character to come ready */
-	while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) != UART_DM_SR_RXRDY)
+	while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) !=
+	    UART_DM_SR_RXRDY)
 		DELAY(4);
 
-        /* Check for Overrun error. If so reset Error Status */
-        if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
-                uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
+	/* Check for Overrun error. If so reset Error Status */
+	if (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_UART_OVERRUN)
+		uart_setreg(bas, UART_DM_CR, UART_DM_CMD_RESET_ERR_STAT);
 
 	/* Read char */
 	c = uart_getreg(bas, UART_DM_RF(0));
@@ -281,7 +284,7 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
  * High-level UART interface.
  */
 struct apq8064_uart_softc {
-        struct uart_softc base;
+	struct uart_softc base;
 	uint32_t ier;
 };
 
@@ -321,7 +324,7 @@ apq8064_bus_probe(struct uart_softc *sc)
 	sc->sc_txfifosz = 64;
 	sc->sc_rxfifosz = 64;
 
-        device_set_desc(sc->sc_dev, "Qualcomm HSUART");
+	device_set_desc(sc->sc_dev, "Qualcomm HSUART");
 
 	return (0);
 }
@@ -344,7 +347,7 @@ apq8064_bus_attach(struct uart_softc *sc)
 	return (0);
 }
 
-/* 
+/*
  * Write the current transmit buffer to the TX FIFO. 
  */
 static int
@@ -368,7 +371,7 @@ apq8064_bus_transmit(struct uart_softc *sc)
 	SETREG(bas, UART_DM_IMR, u->ier);
 	uart_barrier(bas);
 
-	/* 
+	/*
 	 * Inform upper layer that it is transmitting data to hardware,
 	 * this will be cleared when TXIDLE interrupt occurs.
 	 */
@@ -402,18 +405,18 @@ apq8064_bus_receive(struct uart_softc *sc)
 	SETREG(bas, UART_DM_IMR, u->ier);
 
 	/* Loop over until we are full, or no data is available */
-	while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {	
-               	if (uart_rx_full(sc)) {
-	                /* No space left in input buffer */
-                        sc->sc_rxbuf[sc->sc_rxput] = UART_STAT_OVERRUN;
-                        break;
-                }
+	while (uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) {
+		if (uart_rx_full(sc)) {
+			/* No space left in input buffer */
+			sc->sc_rxbuf[sc->sc_rxput] = UART_STAT_OVERRUN;
+			break;
+		}
 
 		/* Read RX FIFO */
 		c = uart_getreg(bas, UART_DM_RF(0));
 		uart_barrier(bas);
 
-                uart_rx_put(sc, c);
+		uart_rx_put(sc, c);
 	}
 
 	uart_unlock(sc->sc_hwmtx);
