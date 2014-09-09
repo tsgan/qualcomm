@@ -259,6 +259,8 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 {
 	int c;
 
+	uart_lock(mtx);
+
 	/* Wait for a character to come ready */
 	while ((uart_getreg(bas, UART_DM_SR) & UART_DM_SR_RXRDY) != UART_DM_SR_RXRDY)
 		DELAY(4);
@@ -269,6 +271,8 @@ apq8064_getc(struct uart_bas *bas, struct mtx *mtx)
 
 	/* Read char */
 	c = uart_getreg(bas, UART_DM_RF(0));
+
+	uart_unlock(mtx);
 
 	return (c);
 }
