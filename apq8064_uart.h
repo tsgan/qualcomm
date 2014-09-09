@@ -76,7 +76,6 @@ enum UART_DM_BITS_PER_CHAR {
 #define	 UART_DM_RXBRK_ZERO_CHAR_OFF		(1 << 8)
 #define	 UART_DM_LOOPBACK			(1 << 7)
 
-
 /* UART Clock Selection Register, write only */
 #define	UART_DM_CSR				0x08
 #define	 UART_DM_CSR_115200			0xff
