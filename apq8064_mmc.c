@@ -280,6 +280,9 @@ apq8064_mmc_intr(void *arg)
 	uint32_t status;
 
 	status = apq8064_mmc_read_4(sc, APQ8064_SD_STATUS);
+	status &= apq8064_mmc_read_4(sc, APQ8064_SD_MASK0);
+	apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, status);
+	DELAY(21);
 
 	if (status != 0x000c0000)
 		debugf("interrupt: 0x%08x\n", status);
@@ -449,8 +452,13 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 
 	sc->apq_flags &= ~APQ8064_SD_FLAGS_IGNORECRC;
 
-	if (cmd->flags & MMC_RSP_PRESENT)
+	cmdreg |= (cmd->opcode | APQ8064_SD_COMMAND_ENABLE);
+
+	if (cmd->flags & MMC_RSP_PRESENT) {
+		if (cmd->flags & MMC_RSP_136)
+			cmdreg |= APQ8064_SD_COMMAND_LONGRSP;
 		cmdreg |= APQ8064_SD_COMMAND_RESPONSE;
+	}
 
 	if (MMC_RSP(cmd->flags) == MMC_RSP_R2)
 		cmdreg |= APQ8064_SD_COMMAND_LONGRSP;
@@ -458,13 +466,18 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 	if (MMC_RSP(cmd->flags) == MMC_RSP_R3)
 		sc->apq_flags |= APQ8064_SD_FLAGS_IGNORECRC;
 
-	cmdreg |= APQ8064_SD_COMMAND_ENABLE;
+//	cmdreg |= APQ8064_SD_COMMAND_ENABLE;
 	cmdreg |= (cmd->opcode & APQ8064_SD_COMMAND_CMDINDEXMASK);
 
-	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, 0xffffffff);
-	DELAY(21);
-	apq8064_mmc_write_4(sc, APQ8064_SD_MASK1, 0xffffffff);
-	DELAY(21);
+	if ((((cmd->opcode == 17) || (cmd->opcode == 18))  ||
+	     ((cmd->opcode == 24) || (cmd->opcode == 25))) ||
+	      (cmd->opcode == 53))
+		cmdreg |= APQ8064_SD_COMMAND_DATCMD;
+
+//	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, 0xffffffff);
+//	DELAY(21);
+//	apq8064_mmc_write_4(sc, APQ8064_SD_MASK1, 0xffffffff);
+//	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_ARGUMENT, cmd->arg);
 	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_COMMAND, cmdreg);
@@ -494,7 +507,8 @@ apq8064_mmc_setup_xfer(struct apq8064_mmc_softc *sc, struct mmc_data *data)
 	    ? APQ8064_SD_DATACTRL_WRITE 
 	    : APQ8064_SD_DATACTRL_READ);
 
-	datactrl |= APQ8064_SD_DATACTRL_DMAENABLE | APQ8064_SD_DATACTRL_ENABLE;
+//	datactrl |= APQ8064_SD_DATACTRL_DMAENABLE | APQ8064_SD_DATACTRL_ENABLE;
+	datactrl |= APQ8064_SD_DATACTRL_ENABLE;
 	datactrl |= (ffs(data->len) - 1) << 4;
 
 	debugf("datactrl: 0x%08x\n", datactrl);
