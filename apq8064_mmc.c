@@ -109,6 +109,8 @@ static void apq8064_mmc_intr(void *);
 
 static void apq8064_mmc_cmd(struct apq8064_mmc_softc *, struct mmc_command *);
 static void apq8064_mmc_setup_xfer(struct apq8064_mmc_softc *, struct mmc_data *);
+static void apq8064_mmc_xfer_done(struct apq8064_mmc_softc *sc);
+static void apq8064_mmc_end_of_data(struct apq8064_mmc_softc *sc);
 
 static int apq8064_mmc_update_ios(device_t, device_t);
 static int apq8064_mmc_request(device_t, device_t, struct mmc_request *);
@@ -140,7 +142,8 @@ apq8064_mmc_write_4(struct apq8064_mmc_softc *sc, uint32_t reg, uint32_t value)
 	 * The min pclk is 144KHz which gives 6.94 us/tick.
 	 * Thus 21us == 3 ticks.
 	 */
-	DELAY(21);
+//	DELAY(21);
+	DELAY(100);
 }
 
 static int
@@ -272,6 +275,7 @@ fail:
 static int
 apq8064_mmc_detach(device_t dev)
 {
+
 	return (EBUSY);
 }
 
@@ -331,10 +335,11 @@ apq8064_mmc_intr(void *arg)
 		cmd->resp[0] = apq8064_mmc_read_4(sc, APQ8064_SD_RESP0);
 		cmd->error = MMC_ERR_NONE;
 	
-		if (cmd->data && (cmd->data->flags & MMC_DATA_WRITE))
+		if (cmd->data && (cmd->data->flags & MMC_DATA_WRITE)) {
 			apq8064_mmc_setup_xfer(sc, sc->apq_req->cmd->data);
-
-		if (!cmd->data) {	
+			apq8064_mmc_xfer_done(sc);
+		}
+		if (!cmd->data) {
 			sc->apq_req->done(sc->apq_req);
 			sc->apq_req = NULL;
 		}
@@ -352,7 +357,7 @@ apq8064_mmc_intr(void *arg)
 	}
 	
 	if (status & APQ8064_SD_STATUS_DATAEND) {
-
+		apq8064_mmc_end_of_data(sc);
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_DATAEND);
 	}
 
@@ -399,6 +404,19 @@ apq8064_mmc_intr(void *arg)
 //	debugf("done\n");
 }
 
+static void
+apq8064_mmc_end_of_data(struct apq8064_mmc_softc *sc)
+{
+
+	apq8064_mmc_xfer_done(sc);
+	if (sc->apq_req) {
+		sc->apq_req->cmd->error = MMC_ERR_NONE;
+		sc->apq_req->done(sc->apq_req);
+		sc->apq_req = NULL;
+	}
+}
+
+
 static int
 apq8064_mmc_request(device_t bus, device_t child, struct mmc_request *req)
 {
@@ -419,8 +437,10 @@ apq8064_mmc_request(device_t bus, device_t child, struct mmc_request *req)
 		return (0);
 	}
 
-	if (req->cmd->data)
+	if (req->cmd->data) {
 		apq8064_mmc_setup_xfer(sc, req->cmd->data);
+		apq8064_mmc_xfer_done(sc);
+	}
 
 	apq8064_mmc_cmd(sc, req->cmd);
 	apq8064_mmc_unlock(sc);
@@ -468,6 +488,21 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 //	apq8064_mmc_write_4(sc, APQ8064_SD_MASK1, 0xffffffff);
 	apq8064_mmc_write_4(sc, APQ8064_SD_ARGUMENT, cmd->arg);
 	apq8064_mmc_write_4(sc, APQ8064_SD_COMMAND, cmdreg);
+}
+
+static void
+apq8064_mmc_xfer_done(struct apq8064_mmc_softc *sc)
+{
+	void *resp_ptr = sc->apq_req->cmd->data->data;
+
+	if (sc->apq_xfer_direction == DIRECTION_WRITE) {
+		memcpy(sc->apq_buffer, resp_ptr, sc->apq_req->cmd->data->len);
+	}
+	else {
+		memcpy(resp_ptr, sc->apq_buffer, sc->apq_req->cmd->data->len);
+	}
+
+	return;
 }
 
 static void
