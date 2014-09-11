@@ -333,7 +333,8 @@ apq8064_mmc_intr(void *arg)
 		cmd->resp[0] = apq8064_mmc_read_4(sc, APQ8064_SD_RESP0);
 		cmd->error = MMC_ERR_NONE;
 	
-		if (cmd->data && (cmd->data->flags & MMC_DATA_WRITE)) {
+//		if (cmd->data && (cmd->data->flags & MMC_DATA_WRITE)) {
+		if (cmd->data) {
 			apq8064_mmc_setup_xfer(sc, sc->apq_req->cmd->data);
 			apq8064_mmc_xfer_done(sc);
 		}
@@ -428,12 +429,12 @@ apq8064_mmc_request(device_t bus, device_t child, struct mmc_request *req)
 
 	sc->apq_req = req;
 
-	if (req->cmd->data && req->cmd->data->flags & MMC_DATA_WRITE) {
-		memcpy(sc->apq_buffer, req->cmd->data->data, req->cmd->data->len);
-		apq8064_mmc_cmd(sc, req->cmd);
-		apq8064_mmc_unlock(sc);
-		return (0);
-	}
+//	if (req->cmd->data && req->cmd->data->flags & MMC_DATA_WRITE) {
+//		memcpy(sc->apq_buffer, req->cmd->data->data, req->cmd->data->len);
+//		apq8064_mmc_cmd(sc, req->cmd);
+//		apq8064_mmc_unlock(sc);
+//		return (0);
+//	}
 
 	if (req->cmd->data) {
 		apq8064_mmc_setup_xfer(sc, req->cmd->data);
