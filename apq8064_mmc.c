@@ -126,9 +126,22 @@ static void apq8064_mmc_dmamap_cb(void *, bus_dma_segment_t *, int, int);
 #define	apq8064_mmc_read_4(_sc, _reg)					\
     bus_space_read_4(_sc->apq_bst, _sc->apq_bsh, _reg)
 
-/* 3 clk delay required here! */
-#define	apq8064_mmc_write_4(_sc, _reg, _value)				\
-    bus_space_write_4(_sc->apq_bst, _sc->apq_bsh, _reg, _value)
+//#define	apq8064_mmc_write_4(_sc, _reg, _value)				\
+//    bus_space_write_4(_sc->apq_bst, _sc->apq_bsh, _reg, _value)
+
+static void
+apq8064_mmc_write_4(struct apq8064_mmc_softc *sc, uint32_t reg, uint32_t value)
+{
+
+	bus_space_write_4(sc->apq_bst, sc->apq_bsh, reg, value);
+	/* 3 clk delay required here! */
+	/*
+	 * Writes to MCI port are not effective for 3 ticks of PCLK.
+	 * The min pclk is 144KHz which gives 6.94 us/tick.
+	 * Thus 21us == 3 ticks.
+	 */
+	DELAY(21);
+}
 
 static int
 apq8064_mmc_probe(device_t dev)
@@ -239,19 +252,9 @@ apq8064_mmc_attach(device_t dev)
 
 //	apq8064_mmc_write_4(sc, APQ8064_SD_POWER, APQ8064_SD_POWER_CTRL_ON);
 
-	/* 
-	 * Writes to MCI port are not effective for 3 ticks of PCLK.
-	 * The min pclk is 144KHz which gives 6.94 us/tick.
-	 * Thus 21us == 3 ticks.
-	 */
-	DELAY(21);
-
 	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, 0);
-	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, 0x5e007ff);
-	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, APQ8064_SD_IRQENABLE);
-	DELAY(21);
 
 	return (0);
 
@@ -282,7 +285,6 @@ apq8064_mmc_intr(void *arg)
 	status = apq8064_mmc_read_4(sc, APQ8064_SD_STATUS);
 	status &= apq8064_mmc_read_4(sc, APQ8064_SD_MASK0);
 	apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, status);
-	DELAY(21);
 
 	if (status != 0x000c0000)
 		debugf("interrupt: 0x%08x\n", status);
@@ -295,7 +297,6 @@ apq8064_mmc_intr(void *arg)
 		sc->apq_req->done(sc->apq_req);
 		sc->apq_req = NULL;
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_CMDCRCFAIL);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_CMDACTIVE)
@@ -310,13 +311,11 @@ apq8064_mmc_intr(void *arg)
 	if (status & APQ8064_SD_STATUS_DATATIMEOUT) {
 		device_printf(sc->apq_dev, "data timeout\n");
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_DATATIMEOUT);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_TXUNDERRUN) {
 		device_printf(sc->apq_dev, "TX underrun\n");
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_TXUNDERRUN);
-		DELAY(21);
 	}
 	
 	if (status & APQ8064_SD_STATUS_CMDRESPEND) {
@@ -341,7 +340,6 @@ apq8064_mmc_intr(void *arg)
 		}
 
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_CMDRESPEND);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_CMDSENT) {
@@ -351,13 +349,11 @@ apq8064_mmc_intr(void *arg)
 		sc->apq_req->done(sc->apq_req);
 		sc->apq_req = NULL;
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_CMDSENT);
-		DELAY(21);
 	}
 	
 	if (status & APQ8064_SD_STATUS_DATAEND) {
 
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_DATAEND);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_CMDTIMEOUT) {
@@ -367,14 +363,12 @@ apq8064_mmc_intr(void *arg)
 		sc->apq_req->done(sc->apq_req);
 		sc->apq_req = NULL;
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_CMDTIMEOUT);
-		DELAY(21);
 		return;
 	}
 
 	if (status & APQ8064_SD_STATUS_STARTBITERR) {
 		device_printf(sc->apq_dev, "start bit error\n");
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_STARTBITERR);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_DATACRCFAIL) {		
@@ -386,7 +380,6 @@ apq8064_mmc_intr(void *arg)
 		sc->apq_req = NULL;
 
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_DATACRCFAIL);
-		DELAY(21);
 	}
 
 	if (status & APQ8064_SD_STATUS_DATABLOCKEND) {
@@ -396,13 +389,11 @@ apq8064_mmc_intr(void *arg)
 
 		if (sc->apq_xfer_direction == DIRECTION_WRITE) {
 			apq8064_mmc_write_4(sc, APQ8064_SD_DATACTRL, 0);
-			DELAY(21);
 		}
 	
 		sc->apq_req->done(sc->apq_req);
 		sc->apq_req = NULL;
 		apq8064_mmc_write_4(sc, APQ8064_SD_CLEAR, APQ8064_SD_STATUS_DATABLOCKEND);
-		DELAY(21);
 	}
 
 //	debugf("done\n");
@@ -446,7 +437,6 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 
 	if (apq8064_mmc_read_4(sc, APQ8064_SD_COMMAND) & APQ8064_SD_COMMAND_ENABLE) {
 		apq8064_mmc_write_4(sc, APQ8064_SD_COMMAND, 0);
-		DELAY(21);
 		DELAY(1000);
 	}
 
@@ -475,13 +465,9 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 		cmdreg |= APQ8064_SD_COMMAND_DATCMD;
 
 //	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, 0xffffffff);
-//	DELAY(21);
 //	apq8064_mmc_write_4(sc, APQ8064_SD_MASK1, 0xffffffff);
-//	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_ARGUMENT, cmd->arg);
-	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_COMMAND, cmdreg);
-	DELAY(21);
 }
 
 static void
@@ -514,11 +500,8 @@ apq8064_mmc_setup_xfer(struct apq8064_mmc_softc *sc, struct mmc_data *data)
 	debugf("datactrl: 0x%08x\n", datactrl);
 
 	apq8064_mmc_write_4(sc, APQ8064_SD_DATATIMER, 0xFFFF0000);
-	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_DATALENGTH, data->len);
-	DELAY(21);
 	apq8064_mmc_write_4(sc, APQ8064_SD_DATACTRL, datactrl);
-	DELAY(21);
 }
 
 static int
@@ -646,7 +629,6 @@ apq8064_mmc_update_ios(device_t bus, device_t child)
 	debugf("clock: %dHz, clkdiv: %d\n", ios->clock, clkdiv);
 
 	apq8064_mmc_write_4(sc, APQ8064_SD_CLOCK, clkdiv | APQ8064_SD_CLOCK_ENABLE);
-	DELAY(21);
 
 	switch (ios->power_mode) {
 	case power_off:
@@ -664,7 +646,6 @@ apq8064_mmc_update_ios(device_t bus, device_t child)
 		pwr |= APQ8064_SD_POWER_OPENDRAIN;
 
 	apq8064_mmc_write_4(sc, APQ8064_SD_POWER, pwr);
-	DELAY(21);
 
 	return (0);
 }
