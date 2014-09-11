@@ -136,14 +136,12 @@ apq8064_mmc_write_4(struct apq8064_mmc_softc *sc, uint32_t reg, uint32_t value)
 {
 
 	bus_space_write_4(sc->apq_bst, sc->apq_bsh, reg, value);
-	/* 3 clk delay required here! */
 	/*
 	 * Writes to MCI port are not effective for 3 ticks of PCLK.
 	 * The min pclk is 144KHz which gives 6.94 us/tick.
 	 * Thus 21us == 3 ticks.
 	 */
-//	DELAY(21);
-	DELAY(100);
+	DELAY(21);
 }
 
 static int
