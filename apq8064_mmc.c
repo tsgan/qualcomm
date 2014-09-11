@@ -433,8 +433,6 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 {
 	uint32_t cmdreg = 0;
 
-	debugf("cmd: %d arg: 0x%08x\n", cmd->opcode, cmd->arg);
-
 	if (apq8064_mmc_read_4(sc, APQ8064_SD_COMMAND) & APQ8064_SD_COMMAND_ENABLE) {
 		apq8064_mmc_write_4(sc, APQ8064_SD_COMMAND, 0);
 		DELAY(1000);
@@ -463,6 +461,8 @@ apq8064_mmc_cmd(struct apq8064_mmc_softc *sc, struct mmc_command *cmd)
 	     ((cmd->opcode == 24) || (cmd->opcode == 25))) ||
 	      (cmd->opcode == 53))
 		cmdreg |= APQ8064_SD_COMMAND_DATCMD;
+
+	debugf("cmd: %d arg: 0x%08x, cmdreg: 0x%08x\n", cmd->opcode, cmd->arg, cmdreg);
 
 //	apq8064_mmc_write_4(sc, APQ8064_SD_MASK0, 0xffffffff);
 //	apq8064_mmc_write_4(sc, APQ8064_SD_MASK1, 0xffffffff);
